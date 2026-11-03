@@ -138,7 +138,7 @@
 
     .c__switch__rail__wrapper:has(input:checked):has(input:disabled)
       .c__switch__rail {
-      background-color: var(--c--components--forms-switch--border--color);
+      background-color: var(--c--components--forms-switch--accent-color);
     }
 
     &__title {
