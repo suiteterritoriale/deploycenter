@@ -112,6 +112,7 @@ export const SERVICE_TYPE_MESSAGES = "messages";
 export const SERVICE_TYPE_DRIVE = "drive";
 export const SERVICE_TYPE_DOMAINS = "domains";
 export const SERVICE_TYPE_BAL = "bal";
+export const SERVICE_TYPE_DOMAIN_REGISTRATION = "domain_registration";
 
 // The address channels a BAL commune exposes for administration. Mirrors
 // core.services.bal.CHANNELS.
@@ -162,6 +163,61 @@ export type DomainsCheck = {
   // The modes that carry a "target" value, so the form knows when to show it.
   modes_with_target: string[];
   results: DomainCheck[];
+};
+
+// Where a registered domain stands. Mirrors DomainRegistration.Status.
+export type DomainRegistrationStatus =
+  | "requested"
+  | "unverified"
+  | "pending"
+  | "registered"
+  | "active"
+  | "blocked"
+  | "expired"
+  | "failed"
+  | "released";
+
+export type DomainRegistration = {
+  id: string;
+  domain: string;
+  status: DomainRegistrationStatus;
+  origin: "registered" | "imported";
+  registrar: string;
+  // The registrar's own word for the status, unmodified.
+  registrar_status: string;
+  registrar_message: string;
+  // What the registrar reports, and what we want it to be.
+  nameservers: string[];
+  desired_nameservers: string[];
+  registered_at: string | null;
+  expires_at: string | null;
+  status_changed_at: string;
+  last_checked_at: string | null;
+  last_error: string;
+  created_at: string;
+};
+
+export type DomainRegistrationAddress = {
+  address1: string;
+  zip_code: string;
+  city: string;
+};
+
+// The verdict on a domain someone wants to register. The backend is the only
+// validator: the modal shows what it says.
+export type DomainRegistrationCheck = {
+  domain: string;
+  registrable: boolean;
+  reasons: string[];
+  message: string;
+  // Registrable, but the registry examines the name first: it can take days.
+  needs_review: boolean;
+  nameservers: string[];
+};
+
+export type DomainRegistrationSuggestions = {
+  domains: string[];
+  address: DomainRegistrationAddress;
 };
 
 export type AccountServiceLinkRole = { scope: Record<string, unknown> };
@@ -320,6 +376,78 @@ export const checkDomains = async (
     { method: "POST", body: JSON.stringify({ domains }) }
   );
   return (await response.json()) as DomainsCheck;
+};
+
+const domainRegistrationsPath = (operatorId: string, organizationId: string) =>
+  `operators/${operatorId}/organizations/${organizationId}/domain-registrations/`;
+
+export const getDomainRegistrations = async (
+  operatorId: string,
+  organizationId: string
+): Promise<DomainRegistration[]> => {
+  const response = await fetchAPI(
+    domainRegistrationsPath(operatorId, organizationId)
+  );
+  return (await response.json()) as DomainRegistration[];
+};
+
+export const checkDomainRegistration = async (
+  operatorId: string,
+  organizationId: string,
+  domain: string
+): Promise<DomainRegistrationCheck> => {
+  const response = await fetchAPI(
+    `${domainRegistrationsPath(operatorId, organizationId)}check/`,
+    { method: "POST", body: JSON.stringify({ domain }) }
+  );
+  return (await response.json()) as DomainRegistrationCheck;
+};
+
+export const getDomainRegistrationSuggestions = async (
+  operatorId: string,
+  organizationId: string
+): Promise<DomainRegistrationSuggestions> => {
+  const response = await fetchAPI(
+    `${domainRegistrationsPath(operatorId, organizationId)}suggestions/`
+  );
+  return (await response.json()) as DomainRegistrationSuggestions;
+};
+
+export const createDomainRegistration = async (
+  operatorId: string,
+  organizationId: string,
+  data: { domain: string } & DomainRegistrationAddress
+): Promise<DomainRegistration> => {
+  const response = await fetchAPI(
+    domainRegistrationsPath(operatorId, organizationId),
+    { method: "POST", body: JSON.stringify(data) }
+  );
+  return (await response.json()) as DomainRegistration;
+};
+
+export const refreshDomainRegistration = async (
+  operatorId: string,
+  organizationId: string,
+  id: string
+): Promise<DomainRegistration> => {
+  const response = await fetchAPI(
+    `${domainRegistrationsPath(operatorId, organizationId)}${id}/refresh/`,
+    { method: "POST" }
+  );
+  return (await response.json()) as DomainRegistration;
+};
+
+export const updateDomainRegistrationNameservers = async (
+  operatorId: string,
+  organizationId: string,
+  id: string,
+  nameservers: string[]
+): Promise<DomainRegistration> => {
+  const response = await fetchAPI(
+    `${domainRegistrationsPath(operatorId, organizationId)}${id}/`,
+    { method: "PATCH", body: JSON.stringify({ nameservers }) }
+  );
+  return (await response.json()) as DomainRegistration;
 };
 
 export const getOrganizationServices = async (

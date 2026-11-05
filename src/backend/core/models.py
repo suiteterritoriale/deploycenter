@@ -14,8 +14,10 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from encrypted_fields.fields import EncryptedCharField
 from timezone_field import TimeZoneField
 
 logger = getLogger(__name__)
@@ -782,6 +784,13 @@ class OperatorServiceConfig(BaseModel):
         blank=True,
         help_text=_("JSON overrides merged on top of the service's base config"),
     )
+    api_secret = EncryptedCharField(
+        _("API secret"),
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_("Secret this operator uses to reach the service, stored encrypted"),
+    )
 
     class Meta:
         db_table = "deploycenter_operator_service_config"
@@ -807,6 +816,16 @@ class OperatorServiceConfig(BaseModel):
                     )
                 }
             )
+        if self.service_id and self.service.type == "domain_registration":
+            from core.services.registrars import (  # noqa: PLC0415
+                RegistrarConfigError,
+                parse_config,
+            )
+
+            try:
+                parse_config(self.get_effective_config(), self.api_secret)
+            except RegistrarConfigError as error:
+                raise ValidationError({"config_override": str(error)}) from error
 
     def get_effective_config(self):
         """Return the service config with this operator's overrides merged on top.
@@ -1175,6 +1194,207 @@ class ServiceSubscription(BaseModel):
         super().clean()
         self.validate_proconnect_subscription()
         self.validate_can_activate()
+
+
+class DomainRegistration(BaseModel):
+    """A domain name held at a registrar on behalf of an organization.
+
+    Covers a registration we requested as well as one that already existed
+    (``origin``). ``status`` follows the domain's life at the registrar, see
+    docs/domain_registration.md; ``next_check_at`` says when the registrar is next
+    to be asked about it, and is null once nothing more can happen.
+    """
+
+    class Status(models.TextChoices):
+        """Where a domain stands. Everything but REQUESTED is read from the registrar."""
+
+        REQUESTED = "requested", _("Requested")
+        UNVERIFIED = "unverified", _("Unverified")
+        PENDING = "pending", _("Pending")
+        REGISTERED = "registered", _("Registered")
+        ACTIVE = "active", _("Active")
+        BLOCKED = "blocked", _("Blocked")
+        EXPIRED = "expired", _("Expired")
+        FAILED = "failed", _("Failed")
+        RELEASED = "released", _("Released")
+
+    # Nothing more can happen to these: no further check is scheduled.
+    FINAL_STATUSES = (Status.FAILED, Status.RELEASED)
+
+    class Origin(models.TextChoices):
+        """How we came to know the domain."""
+
+        REGISTERED = "registered", _("Registered here")
+        IMPORTED = "imported", _("Already registered")
+
+    class Registrar(models.TextChoices):
+        """Supported registrars, the keys of core.services.registrars."""
+
+        NETIM = "netim", "Netim"
+        NAMESHIELD = "nameshield", "Nameshield"
+
+    domain = models.CharField(
+        _("domain"),
+        max_length=253,
+        unique=True,
+        help_text=_("Domain name, lowercase"),
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="domain_registrations",
+        verbose_name=_("organization"),
+        help_text=_("Organization the domain is held for"),
+    )
+    operator = models.ForeignKey(
+        Operator,
+        on_delete=models.PROTECT,
+        related_name="domain_registrations",
+        verbose_name=_("operator"),
+        help_text=_("Operator whose registrar account holds the domain"),
+    )
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.PROTECT,
+        related_name="domain_registrations",
+        verbose_name=_("service"),
+        help_text=_("Domain registration service the domain belongs to"),
+    )
+    registrar = models.CharField(
+        _("registrar"),
+        max_length=32,
+        choices=Registrar.choices,
+        help_text=_("Registrar holding the domain"),
+    )
+    origin = models.CharField(
+        _("origin"),
+        max_length=16,
+        choices=Origin.choices,
+        default=Origin.REGISTERED,
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=Status.choices,
+        default=Status.REQUESTED,
+    )
+    status_changed_at = models.DateTimeField(
+        _("status changed on"),
+        default=timezone.now,
+        help_text=_("When the domain last changed status"),
+    )
+    years = models.PositiveSmallIntegerField(
+        _("years"),
+        default=10,
+        help_text=_("Registration period requested"),
+    )
+    registrant = models.JSONField(
+        _("registrant"),
+        default=dict,
+        blank=True,
+        help_text=_("The holder data sent to the registrar"),
+    )
+    desired_nameservers = models.JSONField(
+        _("desired nameservers"),
+        default=list,
+        blank=True,
+        help_text=_("Nameservers the domain should be delegated to"),
+    )
+    nameservers = models.JSONField(
+        _("nameservers"),
+        default=list,
+        blank=True,
+        help_text=_("Nameservers last reported by the registrar"),
+    )
+    registrar_status = models.CharField(
+        _("registrar status"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_("Status as last reported by the registrar, unmodified"),
+    )
+    registrar_message = models.TextField(
+        _("registrar message"),
+        blank=True,
+        default="",
+        help_text=_("Last message the registrar gave about the domain"),
+    )
+    registrar_data = models.JSONField(
+        _("registrar data"),
+        default=dict,
+        blank=True,
+        help_text=_("References kept for the registrar: contacts, operations"),
+    )
+    registered_at = models.DateField(_("registered on"), blank=True, null=True)
+    expires_at = models.DateField(_("expires on"), blank=True, null=True)
+    last_checked_at = models.DateTimeField(_("last checked on"), blank=True, null=True)
+    next_check_at = models.DateTimeField(
+        _("next check on"),
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text=_("When the registrar is next asked about the domain"),
+    )
+    failures = models.PositiveSmallIntegerField(
+        _("failures"),
+        default=0,
+        help_text=_("Registrar calls failed in a row"),
+    )
+    last_error = models.TextField(
+        _("last error"),
+        blank=True,
+        default="",
+        help_text=_("Why the last registrar call failed"),
+    )
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("requested by"),
+    )
+
+    class Meta:
+        db_table = "deploycenter_domain_registration"
+        verbose_name = _("domain registration")
+        verbose_name_plural = _("domain registrations")
+        ordering = ["domain"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(status__in=["failed", "released"])
+                | models.Q(next_check_at__isnull=True),
+                name="domain_registration_final_not_scheduled",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.domain} ({self.status})"
+
+    @property
+    def is_final(self) -> bool:
+        """Whether nothing more can happen to the domain."""
+        return self.status in self.FINAL_STATUSES
+
+    def move_to(self, status, now=None):
+        """Change the status, keeping track of when; a final one is never left."""
+        if status == self.status:
+            return
+        if self.is_final:
+            raise ValueError(f"{self.domain} is {self.status}, it cannot change")
+        if status == self.Status.REQUESTED:
+            raise ValueError(f"{self.domain} cannot go back to requested")
+        self.status = status
+        self.status_changed_at = now or timezone.now()
+
+    def clean(self):
+        super().clean()
+        from core.services.domainnames import is_valid_domain  # noqa: PLC0415
+
+        domain = (self.domain or "").strip().lower()
+        if not is_valid_domain(domain):
+            raise ValidationError({"domain": _("This is not a valid domain name.")})
+        self.domain = domain
 
 
 class AccountServiceLink(BaseModel):

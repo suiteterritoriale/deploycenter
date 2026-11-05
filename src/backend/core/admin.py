@@ -24,7 +24,9 @@ from rest_framework import serializers as drf_serializers
 
 from . import models
 from .api.serializers import ServiceSubscriptionSerializer
+from .services import registrations
 from .services.proconnect import ProConnectPartnersError, push_subscription_domains
+from .services.registrars import RegistrarConfigError
 from .signals import request_user_context, suppress_proconnect_sync
 
 
@@ -1483,9 +1485,38 @@ class OperatorOrganizationRoleAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context)
 
 
+class OperatorServiceConfigForm(forms.ModelForm):
+    """The secret is write-only: it is never shown back, and blank keeps it."""
+
+    api_secret = forms.CharField(
+        label=_("API secret"),
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off"}),
+        help_text=_("Stored encrypted. Leave empty to keep the current one."),
+    )
+
+    class Meta:
+        model = models.OperatorServiceConfig
+        fields = [
+            "operator",
+            "service",
+            "display_priority",
+            "externally_managed",
+            "config_override",
+            "api_secret",
+        ]
+
+    def clean_api_secret(self):
+        """Keep the stored secret when nothing was typed."""
+        return self.cleaned_data["api_secret"] or self.instance.api_secret
+
+
 @admin.register(models.OperatorServiceConfig)
 class OperatorServiceConfigAdmin(admin.ModelAdmin):
     """Admin class for the OperatorServiceConfig model"""
+
+    form = OperatorServiceConfigForm
 
     list_display = (
         "operator",
@@ -1517,11 +1548,145 @@ class OperatorServiceConfigAdmin(admin.ModelAdmin):
                     "display_priority",
                     "externally_managed",
                     "config_override",
+                    "api_secret",
                 )
             },
         ),
         (_("Metadata"), {"fields": ("created_at", "updated_at")}),
     )
+
+
+class DomainRegistrationForm(forms.ModelForm):
+    """Adding a registration records one that already exists at the registrar."""
+
+    class Meta:
+        model = models.DomainRegistration
+        fields = [
+            "domain",
+            "organization",
+            "operator",
+            "service",
+            "desired_nameservers",
+        ]
+
+    def clean(self):
+        """The operator must have an account for the service to look the domain up."""
+        cleaned_data = super().clean()
+        operator = cleaned_data.get("operator")
+        service = cleaned_data.get("service")
+        # The primary key is set before saving (UUID default): ask the state instead.
+        adding = self.instance._state.adding  # noqa: SLF001  # pylint: disable=protected-access
+        if adding and operator and service:
+            if service.type != registrations.SERVICE_TYPE:
+                self.add_error(
+                    "service", _("This is not a domain registration service.")
+                )
+            else:
+                try:
+                    registrations.operator_account(operator.pk, service.pk)
+                except RegistrarConfigError as error:
+                    self.add_error("operator", str(error))
+        return cleaned_data
+
+
+@admin.register(models.DomainRegistration)
+class DomainRegistrationAdmin(admin.ModelAdmin):
+    """Admin class for the DomainRegistration model"""
+
+    form = DomainRegistrationForm
+
+    list_display = (
+        "domain",
+        "organization",
+        "operator",
+        "registrar",
+        "status",
+        "origin",
+        "expires_at",
+        "next_check_at",
+        "failures",
+    )
+    list_filter = ("status", "registrar", "origin", "operator")
+    search_fields = ("domain", "organization__name", "operator__name")
+    ordering = ("domain",)
+    autocomplete_fields = ["organization", "operator", "service"]
+    actions = ["check_now"]
+    readonly_fields = (
+        "id",
+        "registrar",
+        "origin",
+        "status",
+        "status_changed_at",
+        "years",
+        "registrant",
+        "nameservers",
+        "registrar_status",
+        "registrar_message",
+        "registrar_data",
+        "registered_at",
+        "expires_at",
+        "last_checked_at",
+        "next_check_at",
+        "failures",
+        "last_error",
+        "requested_by",
+        "created_at",
+        "updated_at",
+    )
+
+    def get_fields(self, request, obj=None):
+        """Only what an import needs on the add form; everything on an existing one."""
+        if obj is None:
+            return self.form.Meta.fields
+        return (
+            "domain",
+            "organization",
+            "operator",
+            "service",
+            "registrar",
+            "origin",
+            "status",
+            "status_changed_at",
+            "years",
+            "registrant",
+            "desired_nameservers",
+            "nameservers",
+            "registrar_status",
+            "registrar_message",
+            "registrar_data",
+            "registered_at",
+            "expires_at",
+            "last_checked_at",
+            "next_check_at",
+            "failures",
+            "last_error",
+            "requested_by",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_readonly_fields(self, request, obj=None):
+        """On an existing registration the identity is fixed too."""
+        if obj is None:
+            return ()
+        return self.readonly_fields + ("domain", "organization", "operator", "service")
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            registrations.prepare_imported(obj)
+            obj.requested_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description=_("Ask the registrar about the selected domains now"))
+    def check_now(self, request, queryset):
+        """Have the next run of the registrations task look at them."""
+        for registration in queryset:
+            registrations.check_now(registration)
+        self.message_user(
+            request,
+            _("%(count)d domains will be checked at the next run.")
+            % {"count": queryset.count()},
+        )
 
 
 class ServiceTypeFilter(admin.SimpleListFilter):

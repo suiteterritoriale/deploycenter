@@ -504,7 +504,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "Un numéro de page de l'ensemble des résultats.",
                         "schema": {
                             "type": "integer"
                         }
@@ -513,7 +513,7 @@
                         "name": "page_size",
                         "required": false,
                         "in": "query",
-                        "description": "Number of results to return per page.",
+                        "description": "Nombre de résultats à retourner par page.",
                         "schema": {
                             "type": "integer"
                         }
@@ -619,7 +619,7 @@
                         "name": "ordering",
                         "required": false,
                         "in": "query",
-                        "description": "Which field to use when ordering the results.",
+                        "description": "Quel champ utiliser pour classer les résultats.",
                         "schema": {
                             "type": "string"
                         }
@@ -628,7 +628,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "Un numéro de page de l'ensemble des résultats.",
                         "schema": {
                             "type": "integer"
                         }
@@ -674,7 +674,7 @@
                         "name": "ordering",
                         "required": false,
                         "in": "query",
-                        "description": "Which field to use when ordering the results.",
+                        "description": "Quel champ utiliser pour classer les résultats.",
                         "schema": {
                             "type": "string"
                         }
@@ -692,7 +692,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "Un numéro de page de l'ensemble des résultats.",
                         "schema": {
                             "type": "integer"
                         }
@@ -708,7 +708,7 @@
                         "name": "search",
                         "required": false,
                         "in": "query",
-                        "description": "A search term.",
+                        "description": "Un terme de recherche.",
                         "schema": {
                             "type": "string"
                         }
@@ -788,6 +788,338 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/domain-registrations/": {
+            "get": {
+                "operationId": "domain_registrations_list",
+                "description": "GET the organization's domain registrations.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "operator_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "organization_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "Un numéro de page de l'ensemble des résultats.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "domain-registrations"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDomainRegistrationList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "domain_registrations_create",
+                "description": "POST a request to register a domain.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "operator_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "organization_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "domain-registrations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DomainRegistrationCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DomainRegistration"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/domain-registrations/{id}/": {
+            "patch": {
+                "operationId": "domain_registrations_nameservers",
+                "description": "PATCH the nameservers a domain should be delegated to.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "primary key for the record as UUID"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "operator_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "organization_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "domain-registrations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDomainRegistrationNameserversRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DomainRegistration"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/domain-registrations/{id}/refresh/": {
+            "post": {
+                "operationId": "domain_registrations_refresh",
+                "description": "POST to have the registrar asked about a domain at the next run.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "primary key for the record as UUID"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "operator_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "organization_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "domain-registrations"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DomainRegistration"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/domain-registrations/check/": {
+            "post": {
+                "operationId": "domain_registrations_check",
+                "description": "POST a domain to learn whether it can be registered.\n\nThe name's rules, our own records and the DNS answer first; the registrar is\nonly asked about a name that got through them.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "operator_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "organization_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "domain-registrations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DomainRegistrationCheckRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DomainRegistrationCheckResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/domain-registrations/suggestions/": {
+            "get": {
+                "operationId": "domain_registrations_suggestions",
+                "description": "GET domains the organization could register, that look free.\n\nWith the address to propose for the holder: the organization's own.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "operator_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "organization_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "domain-registrations"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DomainRegistrationSuggestions"
                                 }
                             }
                         },
@@ -879,7 +1211,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "Un numéro de page de l'ensemble des résultats.",
                         "schema": {
                             "type": "integer"
                         }
@@ -1125,6 +1457,61 @@
                 }
             }
         },
+        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/services/{service_id}/subscription/change-operator/": {
+            "post": {
+                "operationId": "operators_organizations_services_subscription_change_operator_create",
+                "description": "Reassign the subscription of another operator to the operator in the URL.\n\nSuperusers only: operators never act on a subscription they do not own.\nThe state, metadata and entitlements are left as they are, but the\nsubscription is saved (and validated) as one of the new operator: an active\none that operator may not activate (population limit) is refused with a 400,\nand the new operator's webhooks and service config now apply to it. The\nprevious operator gets no event.\n\nThe move is recorded in the organization's admin history.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "operator_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "organization_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "service_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9a-z-]*$"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "operators"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ServiceSubscription"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/services/{service_id}/subscription/entitlements/": {
             "get": {
                 "operationId": "operators_organizations_services_subscription_entitlements_list",
@@ -1174,7 +1561,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "Un numéro de page de l'ensemble des résultats.",
                         "schema": {
                             "type": "integer"
                         }
@@ -1210,61 +1597,6 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PaginatedEntitlementList"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}/services/{service_id}/subscription/change-operator/": {
-            "post": {
-                "operationId": "operators_organizations_services_subscription_change_operator_create",
-                "description": "Reassign the subscription of another operator to the operator in the URL.\n\nSuperusers only: operators never act on a subscription they do not own.\nThe state, metadata and entitlements are left as they are, but the\nsubscription is saved (and validated) as one of the new operator: an active\none that operator may not activate (population limit) is refused with a 400,\nand the new operator's webhooks and service config now apply to it. The\nprevious operator gets no event.\n\nThe move is recorded in the organization's admin history.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "operator_id",
-                        "schema": {
-                            "type": "string",
-                            "pattern": "^[0-9a-z-]*$"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "path",
-                        "name": "organization_id",
-                        "schema": {
-                            "type": "string",
-                            "pattern": "^[0-9a-z-]*$"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "path",
-                        "name": "service_id",
-                        "schema": {
-                            "type": "string",
-                            "pattern": "^[0-9a-z-]*$"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "operators"
-                ],
-                "security": [
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ServiceSubscription"
                                 }
                             }
                         },
@@ -1699,10 +2031,18 @@
                         "description": "primary key for the record as UUID"
                     },
                     "email": {
-                        "type": "string",
-                        "format": "email",
                         "description": "Email address of the account",
-                        "maxLength": 255
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 255
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     },
                     "external_id": {
                         "type": "string",
@@ -1737,10 +2077,18 @@
                 "description": "Serialize accounts.",
                 "properties": {
                     "email": {
-                        "type": "string",
-                        "format": "email",
                         "description": "Email address of the account",
-                        "maxLength": 255
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 255
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     },
                     "external_id": {
                         "type": "string",
@@ -1936,6 +2284,227 @@
                     "prefix",
                     "type",
                     "value"
+                ]
+            },
+            "DomainRegistration": {
+                "type": "object",
+                "description": "A domain registration, as the registrar last reported it.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "primary key for the record as UUID"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Domain name, lowercase"
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "origin": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OriginEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "registrar": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RegistrarEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Registrar holding the domain\n\n* `netim` - Netim\n* `nameshield` - Nameshield"
+                    },
+                    "registrar_status": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Status as last reported by the registrar, unmodified"
+                    },
+                    "registrar_message": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Last message the registrar gave about the domain"
+                    },
+                    "nameservers": {
+                        "readOnly": true,
+                        "description": "Nameservers last reported by the registrar"
+                    },
+                    "desired_nameservers": {
+                        "readOnly": true,
+                        "description": "Nameservers the domain should be delegated to"
+                    },
+                    "registered_at": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "Registered on"
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "Expires on"
+                    },
+                    "status_changed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "Status changed on",
+                        "description": "When the domain last changed status"
+                    },
+                    "last_checked_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "Last checked on"
+                    },
+                    "last_error": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Why the last registrar call failed"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "Created on",
+                        "description": "date and time at which a record was created"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "desired_nameservers",
+                    "domain",
+                    "expires_at",
+                    "id",
+                    "last_checked_at",
+                    "last_error",
+                    "nameservers",
+                    "origin",
+                    "registered_at",
+                    "registrar",
+                    "registrar_message",
+                    "registrar_status",
+                    "status",
+                    "status_changed_at"
+                ]
+            },
+            "DomainRegistrationCheckRequest": {
+                "type": "object",
+                "description": "The domain to check.",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "domain"
+                ]
+            },
+            "DomainRegistrationCheckResult": {
+                "type": "object",
+                "description": "The outcome of a check. Documentation/schema only.",
+                "properties": {
+                    "domain": {
+                        "type": "string"
+                    },
+                    "registrable": {
+                        "type": "boolean"
+                    },
+                    "reasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "needs_review": {
+                        "type": "boolean"
+                    },
+                    "nameservers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "domain",
+                    "message",
+                    "nameservers",
+                    "needs_review",
+                    "reasons",
+                    "registrable"
+                ]
+            },
+            "DomainRegistrationCreateRequest": {
+                "type": "object",
+                "description": "The domain to register, and the address of the organization holding it.",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "address1": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                    },
+                    "zip_code": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 10
+                    },
+                    "city": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 30
+                    }
+                },
+                "required": [
+                    "address1",
+                    "city",
+                    "domain",
+                    "zip_code"
+                ]
+            },
+            "DomainRegistrationSuggestions": {
+                "type": "object",
+                "description": "Domains worth trying. Documentation/schema only.",
+                "properties": {
+                    "domains": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "address": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "address",
+                    "domains"
                 ]
             },
             "Entitlement": {
@@ -2448,6 +3017,14 @@
                     "url"
                 ]
             },
+            "OriginEnum": {
+                "enum": [
+                    "registered",
+                    "imported"
+                ],
+                "type": "string",
+                "description": "* `registered` - Registered here\n* `imported` - Already registered"
+            },
             "PaginatedAccountList": {
                 "type": "object",
                 "required": [
@@ -2475,6 +3052,37 @@
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/Account"
+                        }
+                    }
+                }
+            },
+            "PaginatedDomainRegistrationList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DomainRegistration"
                         }
                     }
                 }
@@ -2608,10 +3216,18 @@
                 "description": "Serialize accounts.",
                 "properties": {
                     "email": {
-                        "type": "string",
-                        "format": "email",
                         "description": "Email address of the account",
-                        "maxLength": 255
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 255
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     },
                     "external_id": {
                         "type": "string",
@@ -2630,6 +3246,19 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 100
+                        }
+                    }
+                }
+            },
+            "PatchedDomainRegistrationNameserversRequest": {
+                "type": "object",
+                "description": "The nameservers a domain should be delegated to.",
+                "properties": {
+                    "nameservers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
                         }
                     }
                 }
@@ -2760,6 +3389,14 @@
                     "manual",
                     "requested"
                 ]
+            },
+            "RegistrarEnum": {
+                "enum": [
+                    "netim",
+                    "nameshield"
+                ],
+                "type": "string",
+                "description": "* `netim` - Netim\n* `nameshield` - Nameshield"
             },
             "Service": {
                 "type": "object",
@@ -2979,6 +3616,21 @@
                     }
                 }
             },
+            "StatusEnum": {
+                "enum": [
+                    "requested",
+                    "unverified",
+                    "pending",
+                    "registered",
+                    "active",
+                    "blocked",
+                    "expired",
+                    "failed",
+                    "released"
+                ],
+                "type": "string",
+                "description": "* `requested` - Requested\n* `unverified` - Unverified\n* `pending` - Pending\n* `registered` - Registered\n* `active` - Active\n* `blocked` - Blocked\n* `expired` - Expired\n* `failed` - Failed\n* `released` - Released"
+            },
             "User": {
                 "type": "object",
                 "description": "Serialize users.",
@@ -3042,7 +3694,7 @@
             "cookieAuth": {
                 "type": "apiKey",
                 "in": "cookie",
-                "name": "st_deploycenter_sessionid"
+                "name": "sessionid"
             }
         }
     }

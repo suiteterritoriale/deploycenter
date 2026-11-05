@@ -651,6 +651,180 @@
   }
 }
 
+// Domain registration service: the registered domains in the card, and the forms
+// that register one or change its nameservers.
+.dc__domain-registration {
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  &__empty {
+    font-size: 12px;
+    color: var(--c--theme--colors--greyscale-600);
+  }
+
+  &__row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+
+    &__header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.25rem 0.75rem;
+    }
+
+    &__name {
+      font-weight: 500;
+    }
+
+    &__expires {
+      font-size: 12px;
+      color: var(--c--theme--colors--greyscale-600);
+    }
+
+    &__actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    &__details {
+      font-size: 12px;
+      color: var(--c--theme--colors--greyscale-600);
+    }
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 12px;
+    color: var(--c--theme--colors--greyscale-600);
+
+    &--active {
+      color: var(--c--theme--colors--success-600);
+    }
+
+    &--blocked,
+    &--expired,
+    &--failed {
+      color: var(--c--theme--colors--warning-500);
+    }
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  // Shown in place of the form once the request is recorded.
+  &__done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: center;
+    color: var(--c--theme--colors--greyscale-700);
+
+    > .material-icons,
+    > .c__icon {
+      color: var(--c--theme--colors--success-600);
+    }
+
+    p {
+      margin: 0;
+    }
+
+    &__title {
+      font-weight: 500;
+      color: var(--c--theme--colors--greyscale-900);
+    }
+  }
+
+  &__suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 12px;
+
+    &__list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+  }
+
+  &__checks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-height: 1rem;
+  }
+
+  // One verdict on the domain typed (available, examined first, refused).
+  &__check {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 12px;
+    color: var(--c--theme--colors--greyscale-600);
+
+    &--ok {
+      color: var(--c--theme--colors--success-600);
+    }
+
+    &--warning {
+      color: var(--c--theme--colors--warning-500);
+    }
+  }
+
+  &__holder {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border: none;
+    padding: 0;
+    margin: 0;
+
+    legend {
+      font-size: 14px;
+      font-weight: 500;
+      padding: 0;
+      margin-bottom: 0.5rem;
+    }
+
+    &__city {
+      display: flex;
+      gap: 0.5rem;
+
+      .c__field:first-child {
+        flex: 30 1 0;
+      }
+
+      .c__field:last-child {
+        flex: 70 1 0;
+      }
+    }
+  }
+
+  &__nameserver {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+
+    .c__field {
+      flex: 1;
+    }
+  }
+}
+
 .dc__domain-selector {
   display: flex;
   flex-direction: column;

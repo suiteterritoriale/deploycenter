@@ -32,6 +32,7 @@ dependencies = [
     "django-celery-results==2.6.0",
     "django-configurations==2.5.1",
     "django-cors-headers==4.9.0",
+    "django-fernet-encrypted-fields==0.4.0",
     "django-filter==26.2",
     "django-redis==7.0.0",
     "django-timezone-field==7.2.2",

@@ -18,7 +18,12 @@ from .dpnt import import_dpnt_dataset
 # Import metrics tasks
 from .metrics import scrape_all_service_metrics, scrape_service_metrics
 
+# Import domain registration tasks
+from .registrations import process_domain_registrations
+
 __all__ = [
+    # Domain registration tasks
+    "process_domain_registrations",
     # DPNT tasks
     "import_dpnt_dataset",
     # Metrics tasks

@@ -46,6 +46,7 @@ class Base(Configuration):
     It depends on an environment variable that SHOULD be defined:
 
     * DJANGO_SECRET_KEY
+    * DJANGO_SALT_KEY
 
     You may also want to override default configuration by setting the following environment
     variables:
@@ -68,6 +69,10 @@ class Base(Configuration):
     # Security
     ALLOWED_HOSTS = values.ListValue([])
     SECRET_KEY = values.Value(None)
+    # Salt of the key encrypting the secrets stored in the database. Read by
+    # django-fernet-encrypted-fields, which wants this exact name. A list rotates
+    # it: the first entry encrypts, all of them decrypt.
+    SALT_KEY = values.Value(None)
     SERVER_TO_SERVER_API_TOKENS = values.ListValue([])
 
     # Application definition
