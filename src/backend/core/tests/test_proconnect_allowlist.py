@@ -199,6 +199,47 @@ def test_build_allowlist_covers_whole_departement_with_sources():
     assert "c.fr" not in by_domain
 
 
+def test_build_allowlist_covers_declared_epcis():
+    """config["epcis"] scopes the listed EPCIs and their member communes only."""
+    operator = factories.OperatorFactory(config={"epcis": ["200000001"]})
+    service = _proconnect_service("idp-x")
+    factories.OperatorServiceConfigFactory(operator=operator, service=service)
+
+    factories.OrganizationFactory(
+        type="epci",
+        siren="200000001",
+        epci_siren=None,
+        departement_code_insee="42",
+        proconnect_domains={"dpnt": ["epci.fr"]},
+    )
+    factories.OrganizationFactory(
+        type="commune",
+        siren="111111111",
+        epci_siren="200000001",
+        departement_code_insee="42",
+        proconnect_domains={"dpnt": ["member.fr"]},
+    )
+    # Same département, other EPCI: excluded.
+    factories.OrganizationFactory(
+        type="commune",
+        siren="222222222",
+        epci_siren="200000002",
+        departement_code_insee="42",
+        proconnect_domains={"dpnt": ["other-epci.fr"]},
+    )
+    # A commune whose own siren equals the listed one: excluded.
+    factories.OrganizationFactory(
+        type="commune",
+        siren="200000001",
+        epci_siren="200000003",
+        departement_code_insee="42",
+        proconnect_domains={"dpnt": ["lookalike.fr"]},
+    )
+
+    entries = build_proconnect_allowlist()
+    assert sorted(_domains(entries[0])) == ["epci.fr", "member.fr"]
+
+
 @pytest.mark.parametrize(
     "url",
     [

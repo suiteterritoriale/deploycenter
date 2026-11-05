@@ -2,6 +2,9 @@
 Entitlements API viewsets.
 """
 
+from functools import reduce
+from operator import or_
+
 from django.conf import settings
 from django.db.models import BooleanField, Case, Exists, OuterRef, Q, Value, When
 
@@ -172,6 +175,8 @@ def _find_potential_operators(organization, service):
     1. Operator has an OperatorOrganizationRole with this organization
     2. Operator's config.departements contains the organization's departement_code_insee
        (not applicable for regions)
+    3. Operator's config.epcis contains the organization's EPCI SIREN (its own
+       SIREN for an EPCI, epci_siren for a commune)
     """
     has_org_role = Exists(
         models.OperatorOrganizationRole.objects.filter(
@@ -180,18 +185,28 @@ def _find_potential_operators(organization, service):
         )
     )
 
+    scope_conditions = []
     dept_code = organization.departement_code_insee
     if organization.type != "region" and dept_code:
-        has_dept_match = Case(
-            When(
-                operator__config__departements__contains=[dept_code],
-                then=Value(True),
-            ),
+        scope_conditions.append(Q(operator__config__departements__contains=[dept_code]))
+
+    if organization.type == "epci":
+        epci_siren = organization.siren
+    elif organization.type == "commune":
+        epci_siren = organization.epci_siren
+    else:
+        epci_siren = None
+    if epci_siren:
+        scope_conditions.append(Q(operator__config__epcis__contains=[epci_siren]))
+
+    if scope_conditions:
+        has_scope_match = Case(
+            When(reduce(or_, scope_conditions), then=Value(True)),
             default=Value(False),
             output_field=BooleanField(),
         )
     else:
-        has_dept_match = Value(False, output_field=BooleanField())
+        has_scope_match = Value(False, output_field=BooleanField())
 
     oscs = (
         models.OperatorServiceConfig.objects.filter(
@@ -200,9 +215,9 @@ def _find_potential_operators(organization, service):
         .select_related("operator")
         .annotate(
             has_org_role=has_org_role,
-            has_dept_match=has_dept_match,
+            has_scope_match=has_scope_match,
         )
-        .filter(Q(has_org_role=True) | Q(has_dept_match=True))
+        .filter(Q(has_org_role=True) | Q(has_scope_match=True))
         .order_by("-has_org_role", "-display_priority", "operator__name")
     )
 

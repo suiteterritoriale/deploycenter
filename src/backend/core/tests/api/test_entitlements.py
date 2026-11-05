@@ -1152,6 +1152,79 @@ def test_api_entitlements_potential_operators_no_fallback_region():
     assert data["potentialOperators"] == []
 
 
+def test_api_entitlements_potential_operators_epci_fallback_commune():
+    """Operator found via config.epcis matching the commune's epci_siren."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    operator = factories.OperatorFactory(config={"epcis": ["200000001"]})
+    organization = factories.OrganizationFactory(
+        siret="12345678900001",
+        type="commune",
+        siren="111111111",
+        epci_siren="200000001",
+        departement_code_insee="33",
+    )
+    service = _make_service()
+    factories.OperatorServiceConfigFactory(operator=operator, service=service)
+
+    response = _make_entitlements_request(client, service, organization.siret)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data["potentialOperators"]) == 1
+    assert data["potentialOperators"][0]["name"] == operator.name
+
+
+def test_api_entitlements_potential_operators_epci_fallback_epci():
+    """Operator found via config.epcis matching the EPCI's own siren."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    operator = factories.OperatorFactory(config={"epcis": ["200000001"]})
+    organization = factories.OrganizationFactory(
+        siret="12345678900001",
+        type="epci",
+        siren="200000001",
+        epci_siren=None,
+        departement_code_insee="33",
+    )
+    service = _make_service()
+    factories.OperatorServiceConfigFactory(operator=operator, service=service)
+
+    response = _make_entitlements_request(client, service, organization.siret)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data["potentialOperators"]) == 1
+    assert data["potentialOperators"][0]["name"] == operator.name
+
+
+def test_api_entitlements_potential_operators_epci_no_match():
+    """A commune's own siren or a different epci_siren does not match config.epcis."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    operator = factories.OperatorFactory(config={"epcis": ["200000001"]})
+    # The commune's own siren equals a listed EPCI siren: must not match.
+    organization = factories.OrganizationFactory(
+        siret="12345678900001",
+        type="commune",
+        siren="200000001",
+        epci_siren="200000002",
+        departement_code_insee="33",
+    )
+    service = _make_service()
+    factories.OperatorServiceConfigFactory(operator=operator, service=service)
+
+    response = _make_entitlements_request(client, service, organization.siret)
+    assert response.status_code == 200
+    assert response.json()["potentialOperators"] == []
+
+
 def test_api_entitlements_potential_operators_empty_no_service_config():
     """OperatorOrganizationRole exists but no OperatorServiceConfig → empty list."""
     user = factories.UserFactory()
