@@ -212,6 +212,7 @@ def upload_deployment_operators_dataset():
         departements = (
             operator.config.get("departements", []) if operator.config else []
         )
+        epcis = operator.config.get("epcis", []) if operator.config else []
 
         data.append(
             {
@@ -225,6 +226,7 @@ def upload_deployment_operators_dataset():
                 "departements": ",".join(
                     str(departement) for departement in sorted(departements)
                 ),
+                "epcis": ",".join(str(epci) for epci in sorted(epcis)),
             }
         )
 

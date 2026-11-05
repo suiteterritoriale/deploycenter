@@ -1373,11 +1373,25 @@ def _covered_departement_codes(operator_ids) -> set[str]:
     return codes
 
 
+def _covered_epci_sirens(operator_ids) -> set[str]:
+    """EPCI SIRENs covered by the given operators, from their ``config["epcis"]``."""
+    sirens: set[str] = set()
+    for config in Operator.objects.filter(id__in=list(operator_ids)).values_list(
+        "config", flat=True
+    ):
+        for siren in (config or {}).get("epcis") or []:
+            if isinstance(siren, str) and siren.strip():
+                sirens.add(siren.strip())
+    return sirens
+
+
 def _scoped_organization_ids(operator_ids, service_ids) -> set:
     """Ids of the organizations whose domains feed a provider's allowlist.
 
     For the operators/services resolving to a given idp, this is the union of:
     - orgs in one of the operators' declared ``config["departements"]``,
+    - the EPCIs listed in the operators' ``config["epcis"]`` and their member
+      communes,
     - orgs the operators currently manage (OperatorOrganizationRole),
     - any org with an active subscription to one of the services under one of
       the operators.
@@ -1392,6 +1406,11 @@ def _scoped_organization_ids(operator_ids, service_ids) -> set:
     )
     if covered:
         query |= Q(departement_code_insee__in=covered)
+    covered_epcis = _covered_epci_sirens(operator_ids)
+    if covered_epcis:
+        query |= Q(type="commune", epci_siren__in=covered_epcis) | Q(
+            type="epci", siren__in=covered_epcis
+        )
     if operator_ids:
         query |= Q(operators__in=operator_ids)
     return set(

@@ -818,13 +818,19 @@ class UserAdmin(auth_admin.UserAdmin):
 
 
 class OperatorAdminForm(forms.ModelForm):
-    """Custom form for Operator admin with a dedicated departements field."""
+    """Custom form for Operator admin with dedicated departements and epcis fields."""
 
     departements = forms.CharField(
         label=_("Départements"),
         required=False,
         widget=forms.Textarea(attrs={"cols": 40, "rows": 5}),
         help_text=_("One département code per line (e.g. 01, 2A, 974)."),
+    )
+    epcis = forms.CharField(
+        label=_("EPCIs"),
+        required=False,
+        widget=forms.Textarea(attrs={"cols": 40, "rows": 5}),
+        help_text=_("One EPCI SIREN per line (9 digits)."),
     )
 
     class Meta:
@@ -845,6 +851,8 @@ class OperatorAdminForm(forms.ModelForm):
             config = self.instance.config or {}
             deps = config.get("departements", [])
             self.fields["departements"].initial = "\n".join(str(d) for d in deps)
+            epcis = config.get("epcis", [])
+            self.fields["epcis"].initial = "\n".join(str(e) for e in epcis)
 
     def clean_departements(self):
         """Parse and validate the departements textarea input."""
@@ -852,6 +860,18 @@ class OperatorAdminForm(forms.ModelForm):
         if not raw.strip():
             return []
         return [line.strip() for line in raw.splitlines() if line.strip()]
+
+    def clean_epcis(self):
+        """Parse and validate the epcis textarea input (one SIREN per line)."""
+        raw = self.cleaned_data.get("epcis", "")
+        sirens = [line.strip() for line in raw.splitlines() if line.strip()]
+        for siren in sirens:
+            if not (siren.isascii() and siren.isdigit() and len(siren) == 9):
+                raise forms.ValidationError(
+                    _("Invalid SIREN: %(siren)s (expected 9 digits)."),
+                    params={"siren": siren},
+                )
+        return sirens
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -861,6 +881,11 @@ class OperatorAdminForm(forms.ModelForm):
             config["departements"] = deps
         else:
             config.pop("departements", None)
+        epcis = self.cleaned_data.get("epcis", [])
+        if epcis:
+            config["epcis"] = epcis
+        else:
+            config.pop("epcis", None)
         instance.config = config
         if commit:
             instance.save()
@@ -893,7 +918,7 @@ class OperatorAdmin(admin.ModelAdmin):
             },
         ),
         (_("Financial Information"), {"fields": ("computed_contribution",)}),
-        (_("Configuration"), {"fields": ("departements", "config")}),
+        (_("Configuration"), {"fields": ("departements", "epcis", "config")}),
         (
             _("API Keys"),
             {"fields": ("external_management_api_key",)},
