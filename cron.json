@@ -13,6 +13,9 @@
       "command": "0 * * * * sh -c 'python manage.py proconnect_fetch_prevalidated; python manage.py proconnect_detect_drift'"
     },
     {
+      "command": "* * * * * python manage.py run_task process_domain_registrations"
+    },
+    {
       "command": "0 */4 * * * sh -c 'python manage.py run_task upload_deployment_services_dataset && python manage.py run_task upload_deployment_operators_dataset && python manage.py run_task upload_deployment_adherents_dataset && python manage.py run_task upload_deployment_subscriptions_dataset && python manage.py run_task upload_deployment_metrics_dataset'",
       "size": "2XL"
     }

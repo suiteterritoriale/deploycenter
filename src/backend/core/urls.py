@@ -19,6 +19,7 @@ from .api.viewsets.metrics import OperatorMetricsViewSet, SubscriptionsByService
 from .api.viewsets.operator import OperatorViewSet
 from .api.viewsets.organization import OperatorOrganizationViewSet
 from .api.viewsets.proconnect import ProConnectAllowlistView
+from .api.viewsets.registrations import OrganizationDomainRegistrationViewSet
 from .api.viewsets.service import (
     OrganizationServiceSubscriptionEntitlementViewSet,
     OrganizationServiceSubscriptionViewSet,
@@ -46,6 +47,13 @@ account_router.register(r"accounts", AccountViewSet)
 
 organization_accounts_router = DefaultRouter()
 organization_accounts_router.register(r"accounts", OrganizationAccountsViewSet)
+
+organization_domain_registration_router = SimpleRouter()
+organization_domain_registration_router.register(
+    r"domain-registrations",
+    OrganizationDomainRegistrationViewSet,
+    basename="domain-registration",
+)
 
 
 organization_subscription_entitlements_router = DefaultRouter()
@@ -110,6 +118,7 @@ urlpatterns = [
                                     [
                                         *organization_service_router.urls,
                                         *organization_accounts_router.urls,
+                                        *organization_domain_registration_router.urls,
                                         path(
                                             "domains-check/",
                                             DomainCheckView.as_view(),

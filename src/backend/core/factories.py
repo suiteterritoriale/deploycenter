@@ -141,6 +141,20 @@ class ServiceSubscriptionFactory(factory.django.DjangoModelFactory):
     )
 
 
+class DomainRegistrationFactory(factory.django.DjangoModelFactory):
+    """Factory for DomainRegistration model: a domain active at its registrar."""
+
+    class Meta:
+        model = models.DomainRegistration
+
+    domain = factory.Sequence(lambda n: f"commune{n}.fr")
+    organization = factory.SubFactory(OrganizationFactory)
+    operator = factory.SubFactory(OperatorFactory)
+    service = factory.SubFactory(ServiceFactory, type="domain_registration")
+    registrar = "netim"
+    status = "active"
+
+
 class MetricFactory(factory.django.DjangoModelFactory):
     """Factory for Metric model with unique constraint."""
 

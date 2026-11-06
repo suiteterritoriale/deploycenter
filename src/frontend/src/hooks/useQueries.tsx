@@ -16,6 +16,13 @@ import {
   updateOrganizationProconnectDomains,
   checkDomains,
   DomainCheck,
+  getDomainRegistrations,
+  checkDomainRegistration,
+  getDomainRegistrationSuggestions,
+  createDomainRegistration,
+  refreshDomainRegistration,
+  updateDomainRegistrationNameservers,
+  DomainRegistration,
   getOperatorMetrics,
   getOperatorMetricKeys,
   MetricsParams,
@@ -468,6 +475,135 @@ export const useDomainsChecks = (
     retryChecks: () => void refetch(),
   };
 };
+
+// Statuses in which something is still going on at the registrar.
+const DOMAIN_REGISTRATION_IN_PROGRESS = [
+  "requested",
+  "unverified",
+  "pending",
+  "registered",
+];
+
+const domainRegistrationsKey = (operatorId: string, organizationId: string) => [
+  "operators",
+  operatorId,
+  "organizations",
+  organizationId,
+  "domain-registrations",
+];
+
+/**
+ * The organization's registered domains. Refreshed every minute while one of them
+ * is still being registered or delegated: the backend asks the registrar on its
+ * own schedule, this only picks up what it learned.
+ */
+export const useDomainRegistrations = (
+  operatorId: string,
+  organizationId: string,
+  enabled = true,
+) => {
+  return useQuery({
+    queryKey: domainRegistrationsKey(operatorId, organizationId),
+    queryFn: () => getDomainRegistrations(operatorId, organizationId),
+    enabled: enabled && !!operatorId && !!organizationId,
+    refetchInterval: (query) =>
+      query.state.data?.some((registration) =>
+        DOMAIN_REGISTRATION_IN_PROGRESS.includes(registration.status),
+      )
+        ? 60 * 1000
+        : false,
+  });
+};
+
+/** Whether a domain can be registered. Asked for the domain typed, once it is whole. */
+export const useDomainRegistrationCheck = (
+  operatorId: string,
+  organizationId: string,
+  domain: string,
+) => {
+  return useQuery({
+    queryKey: [
+      ...domainRegistrationsKey(operatorId, organizationId),
+      "check",
+      domain,
+    ],
+    queryFn: () => checkDomainRegistration(operatorId, organizationId, domain),
+    enabled: !!operatorId && !!organizationId && domain.includes("."),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+};
+
+/** Domains worth trying, with the address to propose for the holder. */
+export const useDomainRegistrationSuggestions = (
+  operatorId: string,
+  organizationId: string,
+  enabled: boolean,
+) => {
+  return useQuery({
+    queryKey: [
+      ...domainRegistrationsKey(operatorId, organizationId),
+      "suggestions",
+    ],
+    queryFn: () => getDomainRegistrationSuggestions(operatorId, organizationId),
+    enabled: enabled && !!operatorId && !!organizationId,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+};
+
+const useDomainRegistrationMutation = <Variables,>(
+  mutationFn: (variables: Variables) => Promise<DomainRegistration>,
+  operatorId: string,
+  organizationId: string,
+) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: domainRegistrationsKey(operatorId, organizationId),
+      });
+    },
+  });
+};
+
+export const useMutationRegisterDomain = (
+  operatorId: string,
+  organizationId: string,
+) =>
+  useDomainRegistrationMutation(
+    (data: Parameters<typeof createDomainRegistration>[2]) =>
+      createDomainRegistration(operatorId, organizationId, data),
+    operatorId,
+    organizationId,
+  );
+
+export const useMutationRefreshDomainRegistration = (
+  operatorId: string,
+  organizationId: string,
+) =>
+  useDomainRegistrationMutation(
+    (id: string) => refreshDomainRegistration(operatorId, organizationId, id),
+    operatorId,
+    organizationId,
+  );
+
+export const useMutationUpdateDomainNameservers = (
+  operatorId: string,
+  organizationId: string,
+) =>
+  useDomainRegistrationMutation(
+    ({ id, nameservers }: { id: string; nameservers: string[] }) =>
+      updateDomainRegistrationNameservers(
+        operatorId,
+        organizationId,
+        id,
+        nameservers,
+      ),
+    operatorId,
+    organizationId,
+  );
 
 export const useOperatorMetrics = (
   operatorId: string,

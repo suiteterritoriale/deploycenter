@@ -147,6 +147,67 @@
                 }
               }
             },
+            "domain_registration": {
+              "domains": {
+                "label": "Noms de domaine",
+                "empty": "Aucun nom de domaine enregistré"
+              },
+              "register": "Enregistrer un nom de domaine",
+              "nameservers": "Serveurs DNS",
+              "refresh": "Interroger le registrar maintenant",
+              "expires": "expire le {{date}}",
+              "load_failed": "La liste des noms de domaine n'a pas pu être chargée.",
+              "status": {
+                "requested": "Demande en cours d'envoi",
+                "unverified": "Vérification en cours",
+                "pending": "En cours d'instruction",
+                "registered": "Enregistré, pas encore délégué",
+                "active": "Actif",
+                "blocked": "Bloqué, action requise",
+                "expired": "Expiré",
+                "failed": "Échec de l'enregistrement",
+                "released": "Libéré"
+              },
+              "hints": {
+                "requested": "La demande est enregistrée et sera transmise au registrar dans la minute. Rien à faire de votre côté pour le moment.",
+                "pending": "Rien à faire de votre côté pour le moment. L'enregistrement peut prendre plusieurs jours : certains noms sont examinés par le registre avant d'être attribués.",
+                "registered": "Le nom est enregistré. Il sera publié dans le DNS une fois délégué aux serveurs DNS demandés, sans action de votre part.",
+                "blocked": "Le registre ou le registrar a bloqué ce nom, souvent faute de réponse à une vérification des données du titulaire. Consultez les messages reçus à l'adresse de contact de l'opérateur : sans réponse sous quelques semaines, le nom peut être supprimé.",
+                "expired": "Le nom a expiré. Il peut encore être restauré auprès du registrar.",
+                "released": "Ce nom de domaine n'est plus dans le compte du registrar.",
+                "retrying": "Le registrar ne répond pas pour le moment, une nouvelle tentative aura lieu automatiquement.",
+                "delegating": "Changement de serveurs DNS en cours."
+              },
+              "modal": {
+                "title": "Enregistrer un nom de domaine",
+                "description": "Le nom est enregistré pour 10 ans auprès du registrar de l'opérateur. La collectivité en est le titulaire. La demande est traitée en arrière-plan : une fois envoyée, vous n'avez plus rien à faire.",
+                "suggestions": "Suggestions :",
+                "domain": "Nom de domaine",
+                "domain_placeholder": "exemple.fr",
+                "checking": "Vérification en cours…",
+                "available": "Ce nom de domaine est disponible",
+                "needs_review": "Ce nom est soumis à un examen préalable du registre : l'enregistrement peut prendre plusieurs jours.",
+                "holder": "Adresse de la collectivité",
+                "address1": "Adresse",
+                "zip_code": "Code postal",
+                "city": "Commune",
+                "terms": "Le nom sera délégué aux serveurs DNS suivants : {{nameservers}}. Les messages du registre seront reçus à l'adresse de contact de l'opérateur.",
+                "submit": "Demander l'enregistrement",
+                "done": {
+                  "title": "La demande d'enregistrement de {{domain}} est prise en compte.",
+                  "nothing_to_do": "Vous n'avez rien d'autre à faire pour le moment. La demande est transmise au registrar en arrière-plan, dans la minute qui suit.",
+                  "follow": "Le suivi apparaît dans la carte « Noms de domaine ». L'enregistrement est souvent immédiat, mais certains noms sont examinés par le registre et peuvent demander plusieurs jours. Un nom n'appelle une action de votre part que s'il est affiché « Bloqué, action requise ».",
+                  "close": "Fermer"
+                }
+              },
+              "nameservers_modal": {
+                "title": "Serveurs DNS de",
+                "description": "Indiquez les serveurs DNS vers lesquels déléguer ce nom de domaine (de 2 à 5). Le changement est transmis au registrar en arrière-plan, dans la minute qui suit : vous n'avez rien d'autre à faire.",
+                "nameserver": "Serveur DNS {{index}}",
+                "add": "Ajouter un serveur",
+                "delete": "Supprimer"
+              }
+            },
             "messages": {
               "domains": {
                 "label": "Domaines email",
