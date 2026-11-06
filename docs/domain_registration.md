@@ -47,8 +47,9 @@ object. It is stored encrypted with
 [django-fernet-encrypted-fields](https://github.com/jazzband/django-fernet-encrypted-fields),
 shown nowhere, and leaving it empty in the admin keeps the stored one. The key derives
 from `DJANGO_SECRET_KEY` and `DJANGO_SALT_KEY`: **both must be set in production, and
-changing either without keeping the old one in `SECRET_KEY_FALLBACKS` / the `SALT_KEY`
-list makes the stored secrets unreadable.**
+changing either without keeping the old one makes the stored secrets unreadable.**
+`DJANGO_SALT_KEY` is a comma-separated list: the first salt encrypts, all of them
+decrypt, which is how it is rotated. An old secret key goes in `SECRET_KEY_FALLBACKS`.
 
 The configuration is validated when saved (`parse_config`).
 
@@ -180,7 +181,8 @@ reseller ID and the API password (the "DAS" password of Netim Direct), then uses
 session token; the session is made asynchronous, so a registration answers at once with
 an operation to follow (`Pending`, `Done`, `Failed`, `Cancelled`). Netim allows ten
 concurrent sessions per account, so a client opens its session on first use and closes it
-on exit. The test platform is only served over plain HTTP: use test credentials only.
+on exit. Both the production and the test platform are served over HTTPS, which the
+password in the first request needs.
 
 The holder is created as an owner contact (`bodyForm` `ORG`, the SIREN as
 `companyNumber`); the reseller account is the administrative, technical and billing

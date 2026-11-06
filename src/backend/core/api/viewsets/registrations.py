@@ -21,9 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 class DomainRegistrationSerializer(serializers.ModelSerializer):
-    """A domain registration, as the registrar last reported it."""
+    """A domain registration, as the registrar last reported it.
+
+    Meant to be built by the viewset (``get_serializer``): ``editable`` reads the
+    operator of the request from it.
+    """
+
+    editable = serializers.SerializerMethodField()
 
     class Meta:
+        """Every field is read only."""
+
         model = models.DomainRegistration
         fields = [
             "id",
@@ -41,8 +49,13 @@ class DomainRegistrationSerializer(serializers.ModelSerializer):
             "last_checked_at",
             "last_error",
             "created_at",
+            "editable",
         ]
         read_only_fields = fields
+
+    def get_editable(self, obj) -> bool:
+        """Whether the registration is in the account of the request's operator."""
+        return self.context["view"].owns(obj)
 
 
 # pylint: disable=abstract-method
@@ -109,6 +122,8 @@ class OrganizationDomainRegistrationViewSet(viewsets.GenericViewSet):
 
     queryset = models.DomainRegistration.objects.all()
     serializer_class = DomainRegistrationSerializer
+    # An organization holds a handful of domains: the list is a plain array.
+    pagination_class = None
     # Resolved from the URL for every request, see initial().
     operator = None
     organization = None
@@ -148,6 +163,7 @@ class OrganizationDomainRegistrationViewSet(viewsets.GenericViewSet):
         self.service = subscription.service
 
     def get_queryset(self):
+        """The registrations of the organization in the URL."""
         return super().get_queryset().filter(organization=self.organization)
 
     def _account(self):
@@ -165,10 +181,14 @@ class OrganizationDomainRegistrationViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
+    def owns(self, registration) -> bool:
+        """Whether the registration sits in the account of the request's operator."""
+        return registration.operator_id == self.operator.pk
+
     def _own_registration(self):
         """The registration of the URL, if it sits in this operator's account."""
         registration = self.get_object()
-        if registration.operator_id != self.operator.pk:
+        if not self.owns(registration):
             raise PermissionDenied("Ce nom de domaine est géré par un autre opérateur.")
         return registration
 
@@ -209,7 +229,7 @@ class OrganizationDomainRegistrationViewSet(viewsets.GenericViewSet):
             user=request.user if request.user.is_authenticated else None,
         )
         return Response(
-            DomainRegistrationSerializer(registration).data,
+            self.get_serializer(registration).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -227,7 +247,7 @@ class OrganizationDomainRegistrationViewSet(viewsets.GenericViewSet):
         registrations.request_nameservers(
             registration, payload.validated_data["nameservers"]
         )
-        return Response(DomainRegistrationSerializer(registration).data)
+        return Response(self.get_serializer(registration).data)
 
     @extend_schema(
         operation_id="domain_registrations_refresh",
@@ -239,7 +259,7 @@ class OrganizationDomainRegistrationViewSet(viewsets.GenericViewSet):
     def refresh(self, request, *args, **kwargs):
         """POST to have the registrar asked about a domain at the next run."""
         registration = registrations.check_now(self._own_registration())
-        return Response(DomainRegistrationSerializer(registration).data)
+        return Response(self.get_serializer(registration).data)
 
     @extend_schema(
         operation_id="domain_registrations_check",

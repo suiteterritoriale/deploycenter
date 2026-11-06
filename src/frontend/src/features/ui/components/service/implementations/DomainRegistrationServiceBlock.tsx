@@ -174,7 +174,7 @@ export const DomainRegistrationServiceBlock = (props: {
                   <DomainRegistrationRow
                     key={registration.id}
                     registration={registration}
-                    canEdit={canEdit}
+                    canEdit={canEdit && registration.editable}
                     onEditNameservers={() => setEditing(registration)}
                     onRefresh={() => refresh.mutate(registration.id)}
                     isRefreshing={refresh.isPending}

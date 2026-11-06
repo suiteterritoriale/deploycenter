@@ -411,6 +411,7 @@ def check_delay(registration: DomainRegistration, now) -> Optional[timedelta]:
 
 
 def _schedule(registration, now, soon: Optional[timedelta] = None) -> None:
+    """Set when the registrar is next asked, no later than ``soon`` when given."""
     delay = check_delay(registration, now)
     if delay is not None and soon is not None:
         delay = min(delay, soon)
@@ -418,6 +419,7 @@ def _schedule(registration, now, soon: Optional[timedelta] = None) -> None:
 
 
 def _succeed(registration, now) -> None:
+    """Record a call that went through: the failures in a row start over."""
     registration.failures = 0
     registration.last_error = ""
     registration.last_checked_at = now

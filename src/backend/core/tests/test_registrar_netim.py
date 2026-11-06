@@ -16,11 +16,11 @@ from core.services.registrars import (
     get_client,
     parse_config,
 )
-from core.services.registrars.netim import map_domain_status
+from core.services.registrars.netim import BASE_URLS, map_domain_status
 
 from .test_registrars import netim_config
 
-BASE = "http://oterest.netim.com/1.0"
+BASE = "https://oterest.netim.com/1.0"
 
 HOLDER = Contact(
     organization="Commune de Test",
@@ -180,6 +180,52 @@ def test_get_domain_unknown_to_the_account_is_none():
         json={"message": "Domain not found"},
     )
     assert make_client().get_domain("exemple.fr") is None
+
+
+def test_credentials_are_only_sent_over_https():
+    """The account password goes in the first request, on both platforms."""
+    assert all(url.startswith("https://") for url in BASE_URLS.values())
+
+
+@responses.activate
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Domain not found",
+        "Unknown domain",
+        "The domain exemple.fr does not exist in your account",
+        "Le domaine n'existe pas",
+        "Domaine introuvable",
+    ],
+)
+def test_get_domain_refusals_naming_the_domain_as_absent_are_none(message):
+    """The ways Netim says the domain is not in the account."""
+    open_session()
+    responses.add(
+        responses.GET,
+        f"{BASE}/domain/exemple.fr/info/",
+        status=400,
+        json={"message": message},
+    )
+    assert make_client().get_domain("exemple.fr") is None
+
+
+@responses.activate
+@pytest.mark.parametrize(
+    "message",
+    ["Unknown error", "Unknown parameter", "Parameter not found", "Invalid session"],
+)
+def test_get_domain_generic_refusals_are_not_taken_for_absent(message):
+    """A refusal that does not name the domain says nothing about it."""
+    open_session()
+    responses.add(
+        responses.GET,
+        f"{BASE}/domain/exemple.fr/info/",
+        status=400,
+        json={"message": message},
+    )
+    with pytest.raises(RegistrarRejected):
+        make_client().get_domain("exemple.fr")
 
 
 @responses.activate

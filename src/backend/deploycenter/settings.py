@@ -72,7 +72,7 @@ class Base(Configuration):
     # Salt of the key encrypting the secrets stored in the database. Read by
     # django-fernet-encrypted-fields, which wants this exact name. A list rotates
     # it: the first entry encrypts, all of them decrypt.
-    SALT_KEY = values.Value(None)
+    SALT_KEY = values.ListValue([])
     SERVER_TO_SERVER_API_TOKENS = values.ListValue([])
 
     # Application definition

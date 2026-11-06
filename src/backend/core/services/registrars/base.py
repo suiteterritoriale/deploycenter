@@ -34,6 +34,7 @@ class RegistrarRejected(RegistrarError):
     """The registrar understood the request and refused it. ``message`` says why."""
 
     def __init__(self, message: str, code: str = ""):
+        """Keep the registrar's message and its error code, when it gave one."""
         super().__init__(message)
         self.message = message
         self.code = code
@@ -152,13 +153,16 @@ class RegistrarClient:
     """
 
     def __init__(self, config):
+        """Keep the account, and prepare the HTTP session."""
         self.config = config
         self.http = requests.Session()
 
     def __enter__(self):
+        """Use the client as a context manager."""
         return self
 
     def __exit__(self, *exc_info):
+        """Close the client when the block ends."""
         self.close()
 
     def close(self):

@@ -1,5 +1,7 @@
 """Tests for the registrar configuration and helpers (core/services/registrars)."""
 
+from django.conf import settings
+
 import pytest
 
 from core.services.registrars import (
@@ -88,6 +90,22 @@ def test_parse_config_names_everything_that_is_wrong():
     assert "environment must be one of" in message
     assert "API secret is not set" in message
     assert "contact is missing first_name" in message
+
+
+def test_parse_config_reads_numbers_as_text():
+    """JSON can hold a zip code or an identifier as a number."""
+    config = nameshield_config()
+    config["contact"]["zip_code"] = 75002
+    config["contact"]["identifier"] = 123456789
+    contact = parse_config(config, "token").contact
+    assert contact.zip_code == "75002"
+    assert contact.identifier == "123456789"
+
+
+def test_the_salt_key_is_a_list():
+    """Single or several, the salts that encrypt secrets are read as a rotation list."""
+    assert isinstance(settings.SALT_KEY, list)
+    assert settings.SALT_KEY
 
 
 def test_parse_config_netim_needs_the_reseller_id():

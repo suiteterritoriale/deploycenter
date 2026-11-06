@@ -195,6 +195,9 @@ export type DomainRegistration = {
   last_checked_at: string | null;
   last_error: string;
   created_at: string;
+  // Whether the domain is in the account of the operator we are acting as: the
+  // domains of another operator are listed but cannot be changed.
+  editable: boolean;
 };
 
 export type DomainRegistrationAddress = {

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from unittest import mock
 
 import pytest
+from drf_spectacular.generators import SchemaGenerator
 from rest_framework.test import APIClient
 
 from core import factories, models
@@ -124,6 +125,61 @@ def test_list_shows_the_organizations_domains(setup):
     assert item["status"] == "active"
     assert item["registrar_status"] == "ACTIVE, DELEGATED"
     assert "registrant" not in item and "registrar_data" not in item
+    assert item["editable"] is True
+
+
+def test_list_marks_the_domains_of_another_operator_as_not_editable(setup):
+    """They are listed, but the card must not offer to change them."""
+    client, _, operator, organization, service = setup
+    factories.DomainRegistrationFactory(
+        domain="mienne.fr",
+        organization=organization,
+        operator=operator,
+        service=service,
+    )
+    factories.DomainRegistrationFactory(
+        domain="autre.fr",
+        organization=organization,
+        operator=factories.OperatorFactory(),
+        service=service,
+    )
+
+    response = client.get(url(operator, organization))
+
+    assert {item["domain"]: item["editable"] for item in response.json()} == {
+        "autre.fr": False,
+        "mienne.fr": True,
+    }
+
+
+def test_the_list_is_documented_as_a_plain_array():
+    """The schema must not describe a page the list never returns."""
+    schema = SchemaGenerator(urlconf="core.urls", api_version="v1.0").get_schema(
+        request=None, public=True
+    )
+    operation = schema["paths"][
+        "/api/v1.0/operators/{operator_id}/organizations/{organization_id}"
+        "/domain-registrations/"
+    ]["get"]
+    assert (
+        operation["responses"]["200"]["content"]["application/json"]["schema"]["type"]
+        == "array"
+    )
+    assert "page" not in [parameter["name"] for parameter in operation["parameters"]]
+
+
+def test_list_is_a_plain_array_not_a_page(setup):
+    """The card reads the whole list: no pagination wraps it."""
+    client, _, operator, organization, service = setup
+    for _ in range(25):
+        factories.DomainRegistrationFactory(
+            organization=organization, operator=operator, service=service
+        )
+
+    body = client.get(url(operator, organization)).json()
+
+    assert isinstance(body, list)
+    assert len(body) == 25
 
 
 # ---------------------------------------------------------------------------

@@ -35,10 +35,10 @@ from .base import (
 
 logger = logging.getLogger(__name__)
 
-# The test platform is only served over plain HTTP.
+# Both are served over HTTPS: the account password goes in the first request.
 BASE_URLS = {
     "production": "https://rest.netim.com/1.0",
-    "ote": "http://oterest.netim.com/1.0",
+    "ote": "https://oterest.netim.com/1.0",
 }
 
 # Netim names no more than five nameservers on a domain.
@@ -55,7 +55,16 @@ _LIMITS = {
     "city": 30,
 }
 
-_UNKNOWN_DOMAIN = re.compile(r"not found|unknown|does not exist|n'existe pas", re.I)
+# A refusal that says the domain is not in the account. It has to name the domain:
+# "Unknown error" or "Unknown parameter" say nothing about it.
+_ABSENT = (
+    r"not found|unknown|does not exist|doesn't exist|n'existe pas|introuvable|inconnu"
+)
+_UNKNOWN_DOMAIN = re.compile(
+    rf"\b(?:domain|domaine)\b.{{0,60}}?(?:{_ABSENT})"
+    rf"|(?:{_ABSENT}).{{0,30}}?\b(?:domain|domaine)\b",
+    re.I,
+)
 
 _OPERATION_STATES = {
     "done": OPERATION_DONE,
@@ -88,6 +97,7 @@ def map_domain_status(raw: str) -> Optional[str]:
 
 
 def _parse_date(value) -> Optional[date]:
+    """A ``YYYY-MM-DD`` date (a time after it is ignored), or ``None``."""
     try:
         return date.fromisoformat(str(value)[:10])
     except ValueError:
@@ -98,11 +108,13 @@ class NetimClient(RegistrarClient):
     """A Netim reseller account."""
 
     def __init__(self, config):
+        """Prepare the client; no session is opened before the first call."""
         super().__init__(config)
         self.base = BASE_URLS[config.environment]
         self.token = None
 
     def _open_session(self):
+        """Log in, and make the session asynchronous."""
         response = self._send(
             "POST",
             "/session/",
@@ -128,6 +140,7 @@ class NetimClient(RegistrarClient):
         )
 
     def _send(self, method, path, **kwargs):
+        """Send one request, turning a network failure into ``RegistrarUnavailable``."""
         headers = {"Content-Type": "application/json", **kwargs.pop("headers", {})}
         try:
             return self.http.request(
@@ -140,6 +153,7 @@ class NetimClient(RegistrarClient):
 
     @staticmethod
     def _check(response):
+        """Raise for a response that is not a success."""
         if response.status_code >= 500 or response.status_code == 429:
             raise RegistrarUnavailable(f"Netim answered {response.status_code}")
         if response.status_code >= 400:
@@ -168,6 +182,7 @@ class NetimClient(RegistrarClient):
         )  # pragma: no cover
 
     def close(self):
+        """Close the session, if one was opened."""
         if self.token:
             try:
                 self._send(
@@ -181,6 +196,7 @@ class NetimClient(RegistrarClient):
         super().close()
 
     def check(self, domain):
+        """Whether Netim can register the domain, and whether the registry reviews it."""
         results = self._call("GET", f"/domain/{domain}/check/")
         entry = results[0] if isinstance(results, list) and results else {}
         result = str(entry.get("result", "")).upper()
@@ -198,6 +214,7 @@ class NetimClient(RegistrarClient):
         return Availability(domain, False, reason=(reason or result).lower())
 
     def get_domain(self, domain) -> Optional[DomainState]:
+        """The domain in the account, or ``None`` when Netim says it is not there."""
         try:
             info = self._call("GET", f"/domain/{domain}/info/")
         except RegistrarRejected as error:
@@ -219,6 +236,7 @@ class NetimClient(RegistrarClient):
         )
 
     def create_contacts(self, domain, holder: Contact, operator: Contact) -> dict:
+        """Create the holder as an owner contact; the reseller is every other contact."""
         body = {
             "firstName": holder.first_name,
             "lastName": holder.last_name,
@@ -255,6 +273,7 @@ class NetimClient(RegistrarClient):
 
     @staticmethod
     def _nameservers(nameservers):
+        """Nameservers as the flat ``ns1``..``ns5`` fields Netim takes."""
         if len(nameservers) > MAX_NAMESERVERS:
             raise RegistrarRejected(
                 f"Netim takes at most {MAX_NAMESERVERS} nameservers"
@@ -263,6 +282,7 @@ class NetimClient(RegistrarClient):
 
     @staticmethod
     def _operation(data) -> Operation:
+        """An operation as Netim reports it; a status we do not know is pending."""
         status = str(data.get("STATUS", "")).lower()
         return Operation(
             state=_OPERATION_STATES.get(status, OPERATION_PENDING),
@@ -271,6 +291,7 @@ class NetimClient(RegistrarClient):
         )
 
     def create_domain(self, domain, years, contacts, nameservers) -> Operation:
+        """Ask Netim to register the domain."""
         body = {
             "idOwner": contacts["owner"],
             "idAdmin": contacts["admin"],
@@ -282,8 +303,10 @@ class NetimClient(RegistrarClient):
         return self._operation(self._call("POST", f"/domain/{domain}/", body))
 
     def set_nameservers(self, domain, nameservers) -> Operation:
+        """Ask Netim to delegate the domain to these nameservers."""
         body = self._nameservers(nameservers)
         return self._operation(self._call("PUT", f"/domain/{domain}/dns/", body))
 
     def get_operation(self, reference) -> Operation:
+        """Where an earlier request stands."""
         return self._operation(self._call("GET", f"/operation/{reference}"))

@@ -122,17 +122,21 @@ def parse_config(config: dict, secret) -> RegistrarConfig:
     if problems:
         raise RegistrarConfigError("; ".join(problems))
 
+    # JSON holds numbers too (a zip code typed without quotes): read everything as text.
+    def text(key, default=""):
+        return str(raw.get(key) or default).strip()
+
     contact = Contact(
-        email=raw["email"].strip(),
+        email=text("email"),
         phone=phone,
-        address1=raw["address1"].strip(),
-        zip_code=raw["zip_code"].strip(),
-        city=raw["city"].strip(),
-        country=str(raw.get("country") or "FR").strip().upper(),
-        organization=str(raw.get("organization") or "").strip(),
-        identifier=str(raw.get("identifier") or "").strip(),
-        first_name=raw["first_name"].strip(),
-        last_name=raw["last_name"].strip(),
+        address1=text("address1"),
+        zip_code=text("zip_code"),
+        city=text("city"),
+        country=text("country", "FR").upper(),
+        organization=text("organization"),
+        identifier=text("identifier"),
+        first_name=text("first_name"),
+        last_name=text("last_name"),
     )
     return RegistrarConfig(registrar, environment, account_id, secret, contact)
 

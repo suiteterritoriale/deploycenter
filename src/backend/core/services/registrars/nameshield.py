@@ -39,6 +39,7 @@ _HOLDS = {"clienthold", "serverhold"}
 
 
 def _parse_date(value) -> Optional[date]:
+    """A ``YYYY-MM-DD`` date (a time after it is ignored), or ``None``."""
     try:
         return date.fromisoformat(str(value)[:10])
     except ValueError:
@@ -76,6 +77,7 @@ class NameshieldClient(RegistrarClient):
     """A Nameshield account."""
 
     def __init__(self, config):
+        """Prepare the client for the account's environment."""
         super().__init__(config)
         self.base = BASE_URLS[config.environment]
 
@@ -111,10 +113,12 @@ class NameshieldClient(RegistrarClient):
 
     @staticmethod
     def _first(body) -> dict:
+        """The first item of a response's ``data`` list, or an empty one."""
         data = body.get("data") if isinstance(body, dict) else None
         return data[0] if isinstance(data, list) and data else {}
 
     def check(self, domain):
+        """Whether the domain can be registered through the API."""
         _, body = self._call("GET", f"/domains/{domain}/check")
         entry = self._first(body)
         if not entry:
@@ -138,6 +142,7 @@ class NameshieldClient(RegistrarClient):
         )
 
     def get_domain(self, domain) -> Optional[DomainState]:
+        """The domain in the account, or ``None`` when Nameshield does not know it."""
         try:
             _, body = self._call("GET", f"/domains/{domain}")
         except RegistrarRejected as error:
@@ -165,6 +170,7 @@ class NameshieldClient(RegistrarClient):
         )
 
     def _create_contact(self, extension, kind, contact: Contact) -> str:
+        """Create one contact of a kind for an extension, and return its handle."""
         body = {
             "extension": extension,
             "type": kind,
@@ -186,6 +192,8 @@ class NameshieldClient(RegistrarClient):
         return handle
 
     def create_contacts(self, domain, holder: Contact, operator: Contact) -> dict:
+        """Create the owner from the holder, and the administrative and technical
+        contacts from the operator."""
         extension = domain.split(".", 1)[1]
         return {
             "owner": self._create_contact(extension, "owner", holder),
@@ -194,6 +202,7 @@ class NameshieldClient(RegistrarClient):
         }
 
     def create_domain(self, domain, years, contacts, nameservers) -> Operation:
+        """Ask Nameshield to register the domain."""
         body = {
             "domain": domain,
             "period": years,
@@ -208,10 +217,12 @@ class NameshieldClient(RegistrarClient):
         return Operation(OPERATION_PENDING)
 
     def set_nameservers(self, domain, nameservers) -> Operation:
+        """Ask Nameshield to delegate the domain to these nameservers."""
         code, _ = self._call(
             "PUT", f"/domains/{domain}", {"nameservers": _positions(nameservers)}
         )
         return Operation(OPERATION_DONE if code == 200 else OPERATION_PENDING)
 
     def get_operation(self, reference) -> Operation:
+        """Nameshield gives no operation to follow."""
         raise NotImplementedError("Nameshield gives no operations to follow")

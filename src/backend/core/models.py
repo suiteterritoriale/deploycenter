@@ -1369,6 +1369,7 @@ class DomainRegistration(BaseModel):
         ]
 
     def __str__(self):
+        """The domain and where it stands."""
         return f"{self.domain} ({self.status})"
 
     @property
@@ -1388,6 +1389,7 @@ class DomainRegistration(BaseModel):
         self.status_changed_at = now or timezone.now()
 
     def clean(self):
+        """Store the domain lowercase, and refuse what is not a domain name."""
         super().clean()
         from core.services.domainnames import is_valid_domain  # noqa: PLC0415
 

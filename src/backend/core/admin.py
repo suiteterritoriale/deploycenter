@@ -1672,6 +1672,7 @@ class DomainRegistrationAdmin(admin.ModelAdmin):
         return self.readonly_fields + ("domain", "organization", "operator", "service")
 
     def save_model(self, request, obj, form, change):
+        """A domain added here already exists: it is looked up at its registrar."""
         if not change:
             registrations.prepare_imported(obj)
             obj.requested_by = request.user
