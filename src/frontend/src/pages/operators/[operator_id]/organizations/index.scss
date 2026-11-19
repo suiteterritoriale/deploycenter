@@ -533,6 +533,12 @@
   line-height: 1.2;
 }
 
+.dc__domains-default-hint {
+  font-size: 11px;
+  color: var(--c--theme--colors--greyscale-500);
+  margin-top: 4px;
+}
+
 .dc__service__admins-summary {
   font-size: 11px;
   color: var(--c--theme--colors--greyscale-500);

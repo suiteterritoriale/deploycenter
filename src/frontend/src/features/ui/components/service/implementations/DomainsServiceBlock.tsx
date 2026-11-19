@@ -39,6 +39,11 @@ export const DomainsServiceBlock = (props: {
     return Array.isArray(value) ? (value as string[]) : [];
   }, [subscription?.metadata?.domains]);
 
+  // With no declared domain, the API says which parking pages are served by
+  // default (the same list as the domains export).
+  const defaultParkingDomains =
+    domains.length === 0 ? (subscription?.default_domains ?? []) : [];
+
   const website = useMemo(() => {
     const value = subscription?.metadata?.website;
     return (value ?? {}) as DomainWebsiteConfig;
@@ -101,11 +106,23 @@ export const DomainsServiceBlock = (props: {
                     <span key={domain}>{domain}</span>
                   ))}
                 </span>
+              ) : defaultParkingDomains.length > 0 ? (
+                <span className="dc__domains-list">
+                  {defaultParkingDomains.map((domain) => (
+                    <span key={domain}>{domain}</span>
+                  ))}
+                </span>
               ) : (
                 t(`${PREFIX}.domains.empty`)
               )
             }
-          />
+          >
+            {defaultParkingDomains.length > 0 && (
+              <div className="dc__domains-default-hint">
+                {t(`${PREFIX}.domains.default_parking`)}
+              </div>
+            )}
+          </ServiceAttribute>
           {showDomainError && domains.length === 0 && (
             <div className="dc__service__warning">
               <Icon name="warning" size={IconSize.SMALL} />

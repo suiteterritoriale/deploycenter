@@ -81,6 +81,9 @@ export type ServiceSubscription = {
   entitlements: Entitlement[];
   operator_id?: string;
   operator_name?: string;
+  // Domains service only: the parking pages served by default for a subscription
+  // that declares no domain, as the domains export computes them.
+  default_domains?: string[];
 };
 
 // Input type for creating/updating subscriptions

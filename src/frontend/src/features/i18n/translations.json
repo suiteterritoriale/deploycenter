@@ -100,7 +100,8 @@
             "domains": {
               "domains": {
                 "label": "Domaines",
-                "empty": "Aucun"
+                "empty": "Aucun",
+                "default_parking": "Aucun domaine déclaré : ces domaines, issus de service-public.fr, ont une page de parking par défaut."
               },
               "warning": "Vous devez déclarer au moins un domaine avant de pouvoir activer ce service.",
               "modal": {
