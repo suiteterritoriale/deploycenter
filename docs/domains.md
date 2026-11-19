@@ -225,8 +225,15 @@ the records, not on the mode.
   but a row written around it (the admin) can hold one: the earliest claim wins and
   the others are logged and left out.
 
-- The response is not paginated: one snapshot per run, one query. `count` is simply
+- The response is not paginated: one snapshot per run. `count` is simply
   `len(results)` — despite the shape, there is no `next` page to follow.
+- The response is streamed (chunked, no `Content-Length`), so the export is never held
+  whole in memory: the object is `{"results": [...], "count": N}`, with `count` last
+  since it is only known at the end. Read it with a JSON parser, not by position. An
+  error part-way leaves a truncated body that does not parse, under a 200: treat a
+  parse failure as a failed run. The rows are read in two passes (who holds each
+  declared domain, then the entries), so a write between the two is at worst
+  reflected for the subscription it touches.
 - Access requires `Authorization: Bearer <key>` matching the `DOMAINS_API_KEY`
   setting. When that setting is empty the route is closed to everyone.
 
@@ -246,6 +253,13 @@ Only a domain that is unambiguous is proposed. A DILA domain is left out when:
   domain, for that subscription): an ambiguous domain only ever comes from the
   subscription that declares it;
 - it has no RPNT 1.2 extension, since such a domain cannot have a parking page.
+
+The organization's services list (`.../organizations/<id>/services/`) exposes the same
+list for one subscription as `subscription.default_domains`, so the card can show what
+is served instead of "Aucun". It applies the same rule (`default_parking_domains`
+shares `_dpnt_parking_domains` with the export), fed by two queries on the
+organization's own DILA domains rather than a scan of every organization. It is empty
+for an inactive subscription or one that declares a domain.
 
 The default says what we would serve, not that the domain is ours to serve: a job
 that creates zones or pages should still require the domain to be delegated to the

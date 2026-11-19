@@ -8,6 +8,7 @@ DB_PORT=5432
 # Django
 DJANGO_ALLOWED_HOSTS=*
 DJANGO_SECRET_KEY=ThisIsAnExampleKeyForDevPurposeOnly
+DJANGO_SALT_KEY=ThisIsAnExampleSaltForDevPurposeOnly
 DJANGO_SETTINGS_MODULE=deploycenter.settings
 DJANGO_SUPERUSER_PASSWORD=admin
 

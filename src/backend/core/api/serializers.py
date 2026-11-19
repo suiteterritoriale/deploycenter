@@ -1218,15 +1218,29 @@ class OrganizationServiceSerializer(ServiceSerializer):
         # First try current operator's subscription (from prefetch)
         first_subscription = obj.subscriptions.first()
         if first_subscription:
-            return SubscriptionWithOperatorSerializer(first_subscription).data
+            return self._serialize_subscription(obj, first_subscription)
 
         # Fall back to other operator's subscription
         if hasattr(obj, "other_operator_subscription_prefetched"):
             other_subs = obj.other_operator_subscription_prefetched
             if other_subs:
-                return SubscriptionWithOperatorSerializer(other_subs[0]).data
+                return self._serialize_subscription(obj, other_subs[0])
 
         return None
+
+    @staticmethod
+    def _serialize_subscription(service, subscription):
+        """Serialize a subscription, plus what the Domains card needs to show.
+
+        ``default_domains`` is what the domains export proposes for a subscription
+        that declares none (see :func:`domains_service.default_parking_domains`).
+        """
+        data = SubscriptionWithOperatorSerializer(subscription).data
+        if service.type == domains_service.SERVICE_TYPE:
+            data["default_domains"] = domains_service.default_parking_domains(
+                subscription
+            )
+        return data
 
     def get_config(self, obj):
         """Get the effective configuration for the service, with operator overrides."""

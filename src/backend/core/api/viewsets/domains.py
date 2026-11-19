@@ -1,9 +1,14 @@
 """Domains API viewsets."""
 
+import json
+
+from django.http import StreamingHttpResponse
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
+from rest_framework.utils.encoders import JSONEncoder
 from rest_framework.views import APIView
 
 from core.api import permissions
@@ -47,6 +52,35 @@ class DomainExportSerializer(serializers.Serializer):
     results = DomainExportEntrySerializer(many=True)
 
 
+EXPORT_FLUSH_EVERY = 500
+
+
+def _stream_export(entries):
+    """Render the export as ``{"results": [...], "count": N}``, as it is produced.
+
+    Same JSON as the DRF renderer (compact, unicode, same datetime format), written
+    in chunks so that neither the entries nor the document is ever held whole.
+    ``count`` comes last, since it is only known at the end. An error part-way
+    leaves a truncated document, which does not parse: the consumer sees it fail.
+    """
+    count = 0
+    pending = []
+    yield '{"results":['
+    for entry in entries:
+        pending.append(
+            json.dumps(
+                entry, cls=JSONEncoder, ensure_ascii=False, separators=(",", ":")
+            )
+        )
+        count += 1
+        if len(pending) >= EXPORT_FLUSH_EVERY:
+            yield ("," if count > len(pending) else "") + ",".join(pending)
+            pending = []
+    if pending:
+        yield ("," if count > len(pending) else "") + ",".join(pending)
+    yield f'],"count":{count}}}'
+
+
 class DomainListView(APIView):
     """Return every domain declared through the ``domains`` service.
 
@@ -59,10 +93,11 @@ class DomainListView(APIView):
     nothing is stored.
 
     Everything in one response, unfiltered and unpaginated: the point is a single
-    snapshot per run, out of a single query, and a consumer that only wants the
-    parking pages filters on ``website["mode"]`` itself. Access requires
-    ``Authorization: Bearer <DOMAINS_API_KEY>``; when that setting is empty the route
-    is closed.
+    snapshot per run, and a consumer that only wants the parking pages filters on
+    ``website["mode"]`` itself. The response is streamed, so it is built without
+    holding the whole export in memory: ``count`` is the last key of the object.
+    Access requires ``Authorization: Bearer <DOMAINS_API_KEY>``; when that setting
+    is empty the route is closed.
     """
 
     authentication_classes = []
@@ -79,8 +114,12 @@ class DomainListView(APIView):
     )
     def get(self, request):
         """GET /api/v1.0/domains/"""
-        results = domains_service.export_domains()
-        return Response({"count": len(results), "results": results})
+        # JsonResponse would build the whole document, which is what is avoided.
+        # pylint: disable-next=http-response-with-content-type-json
+        return StreamingHttpResponse(
+            _stream_export(domains_service.iter_domains()),
+            content_type="application/json",
+        )
 
 
 # pylint: disable=abstract-method

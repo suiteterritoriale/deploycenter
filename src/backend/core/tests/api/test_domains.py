@@ -2,13 +2,19 @@
 
 # pylint: disable=too-many-lines
 
+import json
+
 from django.conf import settings
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 
 import pytest
+from rest_framework.renderers import JSONRenderer
 from rest_framework.test import APIClient
 
 from core import factories
+from core.api.viewsets import domains as domains_viewset
 from core.services import dns as dns_service
 from core.services import domains as domains_service
 
@@ -293,9 +299,27 @@ def test_domains_subscription_drops_website_when_domain_removed():
     }
 
 
+class _Export:
+    """An export response, its stream read to the end."""
+
+    def __init__(self, response):
+        self.status_code = response.status_code
+        self.headers = response.headers
+        if response.streaming:
+            self.content = b"".join(response.streaming_content)
+        else:
+            self.content = response.content
+
+    def json(self):
+        """The decoded body."""
+        return json.loads(self.content)
+
+
 def _export(client, params=None, key=DOMAINS_API_KEY):
     headers = {"Authorization": f"Bearer {key}"} if key is not None else {}
-    return client.get(EXPORT_ENDPOINT, query_params=params or {}, headers=headers)
+    return _Export(
+        client.get(EXPORT_ENDPOINT, query_params=params or {}, headers=headers)
+    )
 
 
 @override_settings(DOMAINS_API_KEY=DOMAINS_API_KEY)
@@ -659,6 +683,170 @@ def test_domains_export_proposes_nothing_without_an_active_subscription():
     _domains_subscription(operator, service, inactive, is_active=False)
 
     assert _export(APIClient()).json() == {"count": 0, "results": []}
+
+
+@pytest.mark.parametrize("total", [0, 1, 4, 5, 6])
+def test_domains_export_stream_is_valid_json_at_every_chunk_boundary(
+    monkeypatch, total
+):
+    """The comma between chunks is the fragile part: sizes below, at and above the
+    flush size all give a document that parses, with the right count."""
+    monkeypatch.setattr(domains_viewset, "EXPORT_FLUSH_EVERY", 2)
+    entries = [{"domain": f"d{i}.fr"} for i in range(total)]
+
+    document = json.loads("".join(domains_viewset._stream_export(iter(entries))))  # pylint: disable=protected-access
+
+    assert document == {"results": entries, "count": total}
+
+
+@override_settings(DOMAINS_API_KEY=DOMAINS_API_KEY)
+def test_domains_export_is_streamed_and_json_matches_the_drf_renderer():
+    """Streaming changes how the body is sent, not what it says: the entries are
+    serialized as the DRF renderer would (datetimes, unicode), and ``count`` closes
+    the object."""
+    operator, organization, service = _setup()
+    organization.name = "Saint-Étienne"
+    organization.save()
+    _domains_subscription(
+        operator, service, organization, metadata={"domains": ["exemple.fr"]}
+    )
+
+    response = APIClient().get(
+        EXPORT_ENDPOINT, headers={"Authorization": f"Bearer {DOMAINS_API_KEY}"}
+    )
+    body = b"".join(response.streaming_content)
+
+    assert response.streaming
+    assert response["Content-Type"] == "application/json"
+    entries = domains_service.export_domains()
+    rendered = JSONRenderer().render({"results": entries, "count": len(entries)})
+    assert json.loads(body) == json.loads(rendered)
+    assert body.decode().endswith(',"count":1}')
+    assert "Saint-Étienne" in body.decode()
+    assert json.loads(rendered)["results"][0]["updated_at"].endswith("Z")
+
+
+@override_settings(DOMAINS_API_KEY=DOMAINS_API_KEY)
+def test_domains_export_query_count_does_not_grow_with_subscriptions():
+    """The export loads only the columns it reads: touching a deferred one would
+    cost a query per subscription (and the memory of the full row)."""
+    operator, _organization, service = _setup()
+
+    def count_queries():
+        with CaptureQueriesContext(connection) as queries:
+            assert _export(APIClient()).status_code == 200
+        return len(queries)
+
+    _domains_subscription(operator, service, _dpnt_organization("un.fr"))
+    baseline = count_queries()
+    for index in range(5):
+        _domains_subscription(
+            operator,
+            service,
+            _dpnt_organization(f"dpnt-{index}.fr"),
+        )
+        _domains_subscription(
+            operator,
+            service,
+            factories.OrganizationFactory(),
+            metadata={"domains": [f"declare-{index}.fr"]},
+        )
+
+    assert count_queries() == baseline
+
+
+@override_settings(DOMAINS_API_KEY=DOMAINS_API_KEY)
+def test_default_parking_domains_match_the_export():
+    """The per-subscription default is exactly what the export proposes for it."""
+    operator, _organization, service = _setup()
+    organization = _dpnt_organization(
+        "claimed.fr", "mairie-exemple.com", "ok.fr", "other-ok.fr", "shared.fr"
+    )
+    subscription = _domains_subscription(operator, service, organization)
+    sharing = _dpnt_organization("shared.fr")
+    sharing_subscription = _domains_subscription(operator, service, sharing)
+    claiming = _dpnt_organization()
+    claiming_subscription = _domains_subscription(
+        operator, service, claiming, metadata={"domains": ["claimed.fr"]}
+    )
+
+    exported = {}
+    for entry in _export(APIClient()).json()["results"]:
+        if entry["source"] == "dpnt":
+            exported.setdefault(entry["organization"]["id"], []).append(entry["domain"])
+
+    assert domains_service.default_parking_domains(subscription) == [
+        "ok.fr",
+        "other-ok.fr",
+    ]
+    for candidate in (subscription, sharing_subscription, claiming_subscription):
+        assert domains_service.default_parking_domains(candidate) == sorted(
+            exported.get(str(candidate.organization_id), [])
+        )
+
+
+def test_default_parking_domains_is_empty_when_the_export_proposes_nothing():
+    """Inactive, or declaring a domain of its own: no default."""
+    operator, _organization, service = _setup()
+    inactive = _domains_subscription(
+        operator, service, _dpnt_organization("inactif.fr"), is_active=False
+    )
+    declaring = _domains_subscription(
+        operator,
+        service,
+        _dpnt_organization("mairie-exemple.fr"),
+        metadata={"domains": ["autre.fr"]},
+    )
+
+    assert domains_service.default_parking_domains(inactive) == []
+    assert domains_service.default_parking_domains(declaring) == []
+
+
+def _services_by_type(client, operator, organization):
+    response = client.get(
+        f"/api/v1.0/operators/{operator.id}/organizations/{organization.id}/services/"
+    )
+    assert response.status_code == 200
+    return {item["type"]: item for item in response.json()["results"]}
+
+
+def test_domains_service_payload_carries_the_default_domains():
+    """The organization's services list tells the UI which parking pages are served
+    by default, for the Domains subscription only."""
+    user = factories.UserFactory()
+    operator, organization, service = _setup(user)
+    organization.proconnect_domains = {"dpnt": ["mairie-exemple.fr"]}
+    organization.save()
+    _domains_subscription(operator, service, organization)
+    other = factories.ServiceFactory(type="other-service")
+    factories.OperatorServiceConfigFactory(operator=operator, service=other)
+    _domains_subscription(operator, other, organization)
+    client = APIClient()
+    client.force_login(user)
+
+    services = _services_by_type(client, operator, organization)
+
+    assert services["domains"]["subscription"]["default_domains"] == [
+        "mairie-exemple.fr"
+    ]
+    assert "default_domains" not in services["other-service"]["subscription"]
+
+
+def test_domains_service_payload_default_domains_follow_the_declaration():
+    """Once the subscription declares a domain, there is no default to show."""
+    user = factories.UserFactory()
+    operator, organization, service = _setup(user)
+    organization.proconnect_domains = {"dpnt": ["mairie-exemple.fr"]}
+    organization.save()
+    _domains_subscription(
+        operator, service, organization, metadata={"domains": ["autre.fr"]}
+    )
+    client = APIClient()
+    client.force_login(user)
+
+    services = _services_by_type(client, operator, organization)
+
+    assert services["domains"]["subscription"]["default_domains"] == []
 
 
 @override_settings(DOMAINS_API_KEY=DOMAINS_API_KEY)

@@ -28,8 +28,9 @@ import logging
 from urllib.parse import urlsplit, urlunsplit
 
 from django.conf import settings
+from django.db.models import Q
 
-from core.models import ServiceSubscription
+from core.models import Organization, ServiceSubscription
 from core.services import dns as dns_service
 from core.services.domainnames import is_valid_domain, normalize_domains
 from core.services.proconnect import dila_domain_owners, domain_bucket
@@ -311,23 +312,31 @@ def subscription_domains(
     return domains, website
 
 
+# The organization columns a parking page needs to render, besides its id.
+_ORGANIZATION_EXPORT_FIELDS = (
+    "name",
+    "type",
+    "siret",
+    "siren",
+    "code_insee",
+    "code_postal",
+    "population",
+    "departement_code_insee",
+    "region_code_insee",
+    "adresse_messagerie",
+    "telephone",
+    "site_internet",
+    "service_public_url",
+)
+
+
 def _organization_payload(organization) -> dict:
     """The organization data a parking page needs to render."""
     return {
         "id": str(organization.id),
-        "name": organization.name,
-        "type": organization.type,
-        "siret": organization.siret,
-        "siren": organization.siren,
-        "code_insee": organization.code_insee,
-        "code_postal": organization.code_postal,
-        "population": organization.population,
-        "departement_code_insee": organization.departement_code_insee,
-        "region_code_insee": organization.region_code_insee,
-        "adresse_messagerie": organization.adresse_messagerie,
-        "telephone": organization.telephone,
-        "site_internet": organization.site_internet,
-        "service_public_url": organization.service_public_url,
+        **{
+            field: getattr(organization, field) for field in _ORGANIZATION_EXPORT_FIELDS
+        },
     }
 
 
@@ -389,13 +398,89 @@ def _dpnt_parking_domains(subscription, taken, owners) -> list[str]:
     ]
 
 
-def export_domains() -> list[dict]:
-    """Return every domain of an active ``domains`` subscription.
+def default_parking_domains(subscription: ServiceSubscription) -> list[str]:
+    """The domains :func:`export_domains` proposes for this one subscription.
+
+    Same rule as the export (:func:`_dpnt_parking_domains`), fed by two queries on
+    the organization's own DILA domains instead of a scan of every organization
+    and subscription, so it can run on a single page view. Empty unless the
+    subscription is active and declares no domain, as in the export.
+    """
+    if not subscription.is_active or subscription_domains(subscription)[0]:
+        return []
+    organization = subscription.organization
+    candidates = domain_bucket(organization, "dpnt")
+    if not candidates:
+        return []
+
+    dpnt_query = Q()
+    declared_query = Q()
+    for domain in candidates:
+        dpnt_query |= Q(proconnect_domains__dpnt__contains=[domain])
+        declared_query |= Q(metadata__domains__contains=[domain])
+
+    # The organization itself always holds its own candidates.
+    owners: dict[str, set] = {domain: {organization.pk} for domain in candidates}
+    rows = Organization.objects.filter(dpnt_query).values_list(
+        "pk", "proconnect_domains"
+    )
+    for pk, buckets in rows:
+        for domain in normalize_domains(buckets.get("dpnt")):
+            if domain in owners:
+                owners[domain].add(pk)
+
+    taken: set[str] = set()
+    declared = ServiceSubscription.objects.filter(
+        declared_query, service__type=SERVICE_TYPE, is_active=True
+    ).values_list("metadata", flat=True)
+    for metadata in declared:
+        taken.update(normalize_domains((metadata or {}).get(DOMAINS_KEY)))
+
+    return _dpnt_parking_domains(subscription, taken, owners)
+
+
+# Rows fetched per query while the export walks the subscriptions.
+EXPORT_CHUNK_SIZE = 500
+
+
+def _active_subscriptions():
+    """Every active ``domains`` subscription."""
+    return ServiceSubscription.objects.filter(
+        service__type=SERVICE_TYPE, is_active=True
+    )
+
+
+def _claims() -> tuple[set[str], dict]:
+    """Who holds each declared domain, from the declared domains alone.
+
+    Returns ``(taken, holder)``: every domain declared on an active subscription,
+    and for each the pk of the subscription whose claim is the earliest. Reads
+    three columns, one row at a time: this is what keeps the export itself from
+    holding every subscription at once.
+    """
+    taken: set[str] = set()
+    holder: dict = {}
+    rows = (
+        _active_subscriptions()
+        .order_by("created_at", "pk")
+        .values_list("pk", "metadata")
+        .iterator(chunk_size=EXPORT_CHUNK_SIZE)
+    )
+    for pk, metadata in rows:
+        domains = normalize_domains((metadata or {}).get(DOMAINS_KEY))
+        taken.update(domains)
+        for domain in domains:
+            holder.setdefault(domain, pk)
+    return taken, holder
+
+
+def iter_domains():
+    """Yield every domain of an active ``domains`` subscription.
 
     One entry per domain, with what we serve for it (``website``), the DNS records
     to publish for it (``records``), its organization, the operator managing the
-    subscription and where it comes from (``source``). Everything, in one snapshot:
-    a consumer that only wants the parking pages filters on ``website["mode"]``
+    subscription and where it comes from (``source``). Everything, unfiltered: a
+    consumer that only wants the parking pages filters on ``website["mode"]``
     itself.
 
     A subscription that declares no domain gets a parking page, source ``dpnt``, for
@@ -406,29 +491,36 @@ def export_domains() -> list[dict]:
 
     Each domain appears once. The API refuses a second active claim on a domain, but
     a row written around it (the admin) can hold one: the earliest claim wins.
+
+    Entries are produced one subscription at a time, in two passes over the table
+    (:func:`_claims`, then the rows themselves). A write between the two is at worst
+    reflected for the subscription it touches.
     """
-    subscriptions = list(
-        ServiceSubscription.objects.filter(service__type=SERVICE_TYPE, is_active=True)
-        .select_related("organization", "operator")
-        .order_by("organization__name", "pk")
-    )
-    declared = [subscription_domains(subscription) for subscription in subscriptions]
-    taken = {domain for domains, _ in declared for domain in domains}
-    holder: dict[str, int] = {}
-    for index in sorted(
-        range(len(subscriptions)),
-        key=lambda i: (subscriptions[i].created_at, subscriptions[i].pk),
-    ):
-        for domain in declared[index][0]:
-            holder.setdefault(domain, index)
+    taken, holder = _claims()
     # One scan of every organization: only when some subscription needs it.
     owners = None
     proposed: set[str] = set()
 
-    entries = []
-    for index, (subscription, (domains, website)) in enumerate(
-        zip(subscriptions, declared, strict=True)
-    ):
+    subscriptions = (
+        _active_subscriptions()
+        .select_related("organization", "operator")
+        # Only what the export reads: an organization carries large JSON (rpnt)
+        # that is of no use here.
+        .only(
+            "metadata",
+            "created_at",
+            "updated_at",
+            "organization_id",
+            "operator_id",
+            *(f"organization__{field}" for field in _ORGANIZATION_EXPORT_FIELDS),
+            "organization__proconnect_domains",
+            "operator__name",
+        )
+        .order_by("organization__name", "pk")
+        .iterator(chunk_size=EXPORT_CHUNK_SIZE)
+    )
+    for subscription in subscriptions:
+        domains, website = subscription_domains(subscription)
         # What every entry of this subscription shares.
         shared = {
             "updated_at": subscription.updated_at,
@@ -439,7 +531,7 @@ def export_domains() -> list[dict]:
             },
         }
         for domain in domains:
-            if holder[domain] != index:
+            if holder.setdefault(domain, subscription.pk) != subscription.pk:
                 logger.warning(
                     "Domain %s is declared by several active subscriptions; "
                     "subscription %s does not get it",
@@ -447,15 +539,13 @@ def export_domains() -> list[dict]:
                     subscription.pk,
                 )
                 continue
-            entries.append(
-                {
-                    "domain": domain,
-                    "website": export_website(website[domain]),
-                    "records": website_records(website[domain]),
-                    **shared,
-                    "source": SOURCE_SUBSCRIPTION,
-                }
-            )
+            yield {
+                "domain": domain,
+                "website": export_website(website[domain]),
+                "records": website_records(website[domain]),
+                **shared,
+                "source": SOURCE_SUBSCRIPTION,
+            }
         if domains:
             continue
         if owners is None:
@@ -466,16 +556,18 @@ def export_domains() -> list[dict]:
             if domain in proposed:
                 continue
             proposed.add(domain)
-            entries.append(
-                {
-                    "domain": domain,
-                    "website": {"mode": MODE_PARKING},
-                    "records": [],
-                    **shared,
-                    "source": SOURCE_DPNT,
-                }
-            )
-    return entries
+            yield {
+                "domain": domain,
+                "website": {"mode": MODE_PARKING},
+                "records": [],
+                **shared,
+                "source": SOURCE_DPNT,
+            }
+
+
+def export_domains() -> list[dict]:
+    """:func:`iter_domains`, all at once."""
+    return list(iter_domains())
 
 
 def expected_nameservers() -> list[str]:
