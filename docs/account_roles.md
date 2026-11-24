@@ -86,6 +86,18 @@ Both `can_admin_collectivites` and `can_admin_operators` are returned even when
 the queried organization has no active subscription; `is_admin` is only
 returned when it has one.
 
+### `can_admin_maildomains` (Messages service)
+
+Messages makes a user admin of every domain in `can_admin_maildomains`, without
+checking it any further. The resolver reads the domains from the subscription's
+`metadata["domains"]` as they are stored, so a domain may be held by one
+Messages subscription only, active or not
+(`ServiceSubscriptionSerializer._validate_messages_subscription`). A domain a
+request adds is refused with a 400 when another subscription already holds it,
+for superusers too. Domains are normalized on write like the other domain
+lists. Only the domains a request adds are checked, so a duplicate already
+stored does not block an unrelated edit.
+
 ### Resolution priority order
 
 ```

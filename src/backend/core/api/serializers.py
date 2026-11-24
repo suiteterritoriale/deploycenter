@@ -845,6 +845,64 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
                 }
             )
 
+    def _validate_messages_subscription(self, attrs):
+        """Validate the ``domains`` metadata of a Messages subscription.
+
+        Messages makes a user admin of every domain returned by the admin
+        entitlement, which reads them from the subscription as they are stored. A
+        domain therefore belongs to a single subscription, active or not. Only the
+        domains this request adds are checked: a duplicate already stored must not
+        block an unrelated edit.
+        """
+        if self._get_service_type() != "messages":
+            return
+
+        new_metadata = attrs.get("metadata") or {}
+        if "domains" not in new_metadata:
+            return
+
+        domains = self._clean_domain_list(new_metadata["domains"], "metadata")
+        existing_metadata = (self.instance.metadata if self.instance else {}) or {}
+        stored = existing_metadata.get("domains")
+        added = set(domains) - set(
+            domainnames.normalize_domains(stored if isinstance(stored, list) else [])
+        )
+        if added:
+            self._check_messages_domains_not_claimed(added)
+
+        attrs["metadata"] = {**new_metadata, "domains": domains}
+
+    def _check_messages_domains_not_claimed(self, domains):
+        """Refuse domains held by another Messages subscription, active or not."""
+        # Same locking as the other domain claims, see _check_domains_not_claimed.
+        locks.lock_domains(domains)
+
+        overlap_q = Q()
+        for domain in domains:
+            overlap_q |= Q(metadata__domains__contains=[domain])
+
+        conflicting = models.ServiceSubscription.objects.filter(
+            overlap_q, service__type="messages"
+        ).select_for_update()
+        if self.instance:
+            conflicting = conflicting.exclude(pk=self.instance.pk)
+
+        overlap = set()
+        for metadata in conflicting.values_list("metadata", flat=True):
+            overlap |= set(
+                domainnames.normalize_domains((metadata or {}).get("domains"))
+            ) & set(domains)
+
+        if overlap:
+            raise serializers.ValidationError(
+                {
+                    "metadata": (
+                        f"Domain(s) {', '.join(sorted(overlap))} are already "
+                        f"declared by another organization."
+                    )
+                }
+            )
+
     def _is_superuser(self):
         """Check if the current request user is a superuser."""
         request = self.context.get("request")
@@ -975,6 +1033,7 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
 
         self._validate_proconnect_subscription(attrs)
         self._validate_domains_subscription(attrs)
+        self._validate_messages_subscription(attrs)
 
         service = self._get_service()
         if service:
