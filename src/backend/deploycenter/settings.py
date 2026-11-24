@@ -200,8 +200,8 @@ class Base(Configuration):
         "django_celery_results",
         "django_filters",
         "rest_framework",
-        # Django
-        "django.contrib.admin",
+        # Django (the admin app is swapped for one reserved to superusers)
+        "core.admin_site.SuperuserAdminConfig",
         "django.contrib.auth",
         "django.contrib.contenttypes",
         "django.contrib.postgres",

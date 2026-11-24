@@ -1,7 +1,6 @@
 """Tests for the admin page that subscribes every organization of an operator."""
 
 from django.contrib.admin.models import LogEntry
-from django.contrib.auth.models import Permission
 from django.test import Client
 from django.urls import reverse
 
@@ -250,33 +249,6 @@ def test_a_proconnect_subscription_cannot_be_created_active_in_bulk():
     assert not subscriptions.filter(is_active=True).exists()
 
 
-@pytest.mark.parametrize(
-    ("granted", "shown"),
-    [
-        (["view"], False),
-        (["view", "add"], False),
-        (["view", "change"], False),
-        (["view", "add", "change"], True),
-    ],
-)
-def test_the_changelist_link_needs_the_permissions_of_the_page(granted, shown):
-    """The button needs both the add and the change permission, like the page."""
-    user = factories.UserFactory(is_staff=True, is_superuser=False)
-    user.user_permissions.add(
-        *Permission.objects.filter(
-            codename__in=[f"{action}_servicesubscription" for action in granted]
-        )
-    )
-    client = Client()
-    client.force_login(user)
-
-    response = client.get(reverse("admin:core_servicesubscription_changelist"))
-
-    assert response.status_code == 200
-    assert (URL in response.content.decode()) is shown
-    assert (client.get(URL).status_code == 200) is shown
-
-
 def test_a_service_the_operator_does_not_offer_is_refused():
     """As in the API, the service must be configured for the operator."""
     operator, _organizations, _service = _setup(managed=2)
@@ -358,13 +330,13 @@ def test_the_result_is_logged_on_the_operator():
     assert service.name in entry.change_message
 
 
-def test_a_staff_user_without_permission_is_refused():
-    """The page needs the permission to add and change subscriptions."""
+def test_a_staff_user_who_is_not_a_superuser_is_refused():
+    """The admin is reserved to superusers: the page redirects to the login."""
     operator, _organizations, service = _setup(managed=1)
     client = _admin_client(is_superuser=False)
 
-    assert client.get(URL).status_code == 403
-    assert _subscribe(client, operator, service).status_code == 403
+    assert client.get(URL).status_code == 302
+    assert _subscribe(client, operator, service).status_code == 302
     assert not models.ServiceSubscription.objects.filter(service=service).exists()
 
 
