@@ -47,6 +47,7 @@ def fixture_account_test_setup():
 
     service1 = factories.ServiceFactory(name="test-service-1")
     service2 = factories.ServiceFactory(name="test-service-2")
+    factories.OperatorServiceConfigFactory(operator=operator, service=service1)
 
     return {
         "user": user,
@@ -676,6 +677,131 @@ def test_api_organizations_accounts_patch_service_link_operator_not_allowed(
     assert response.json() == {
         "detail": "Vous n'avez pas la permission d'effectuer cette action."
     }
+
+
+def _service_link_client(setup, auth_method, operator_key):
+    """Client acting as the operator holding `operator_key` in the setup."""
+    client = APIClient()
+    if auth_method == "user":
+        client.force_login(
+            setup["user"] if operator_key == "operator" else setup["user2"]
+        )
+    else:
+        key = {"operator": "12345", "operator2": "abcd"}[operator_key]
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer test-external-api-key-{key}")
+    return client
+
+
+@pytest.mark.parametrize("auth_method", ["user", "external_api_key"])
+def test_api_organizations_accounts_patch_service_link_subscribed_by_other_operator(
+    account_test_setup, auth_method
+):
+    """An operator sharing an organization cannot set roles on a service whose
+    subscription for that organization is held by another operator."""
+    setup = account_test_setup
+    organization = setup["organization_ok1"]
+    service = setup["service1"]
+    # Both operators manage the organization and offer the service.
+    factories.OperatorOrganizationRoleFactory(
+        operator=setup["operator2"], organization=organization
+    )
+    factories.OperatorServiceConfigFactory(operator=setup["operator2"], service=service)
+    factories.ServiceSubscriptionFactory(
+        organization=organization, service=service, operator=setup["operator2"]
+    )
+    account = factories.AccountFactory(organization=organization, type="user")
+
+    # operator offers the service but does not hold the subscription.
+    client = _service_link_client(setup, auth_method, "operator")
+    response = client.patch(
+        f"/api/v1.0/accounts/{account.id}/services/{service.id}/",
+        data={"roles": {"admin": {"scope": {}}}},
+        format="json",
+    )
+    assert response.status_code == 403
+    assert not account.service_links.exists()
+
+    # The holder can.
+    client = _service_link_client(setup, auth_method, "operator2")
+    response = client.patch(
+        f"/api/v1.0/accounts/{account.id}/services/{service.id}/",
+        data={"roles": {"admin": {"scope": {}}}},
+        format="json",
+    )
+    assert response.status_code == 200
+    assert account.service_links.filter(service=service, role="admin").exists()
+
+
+@pytest.mark.parametrize("auth_method", ["user", "external_api_key"])
+def test_api_organizations_accounts_patch_service_link_cannot_delete_roles_of_other_operator(
+    account_test_setup, auth_method
+):
+    """A non holder operator cannot remove existing roles either."""
+    setup = account_test_setup
+    organization = setup["organization_ok1"]
+    service = setup["service1"]
+    factories.OperatorOrganizationRoleFactory(
+        operator=setup["operator2"], organization=organization
+    )
+    factories.ServiceSubscriptionFactory(
+        organization=organization, service=service, operator=setup["operator2"]
+    )
+    account = factories.AccountFactory(organization=organization, type="user")
+    account.service_links.create(service=service, role="admin", scope={})
+
+    client = _service_link_client(setup, auth_method, "operator")
+    response = client.patch(
+        f"/api/v1.0/accounts/{account.id}/services/{service.id}/",
+        data={"roles": {}},
+        format="json",
+    )
+    assert response.status_code == 403
+    assert account.service_links.filter(service=service, role="admin").exists()
+
+
+@pytest.mark.parametrize("auth_method", ["user", "external_api_key"])
+def test_api_organizations_accounts_patch_service_link_service_not_offered(
+    account_test_setup, auth_method
+):
+    """Without a subscription, the service must be offered by the operator."""
+    setup = account_test_setup
+    account = factories.AccountFactory(
+        organization=setup["organization_ok1"], type="user"
+    )
+
+    client = _service_link_client(setup, auth_method, "operator")
+    response = client.patch(
+        f"/api/v1.0/accounts/{account.id}/services/{setup['service2'].id}/",
+        data={"roles": {"admin": {"scope": {}}}},
+        format="json",
+    )
+    assert response.status_code == 403
+    assert not account.service_links.exists()
+
+
+@pytest.mark.parametrize("auth_method", ["user", "external_api_key"])
+def test_api_organizations_accounts_patch_service_link_subscription_holder(
+    account_test_setup, auth_method
+):
+    """The operator holding the subscription can set roles on the service."""
+    setup = account_test_setup
+    service = setup["service2"]
+    factories.ServiceSubscriptionFactory(
+        organization=setup["organization_ok1"],
+        service=service,
+        operator=setup["operator"],
+    )
+    account = factories.AccountFactory(
+        organization=setup["organization_ok1"], type="user"
+    )
+
+    client = _service_link_client(setup, auth_method, "operator")
+    response = client.patch(
+        f"/api/v1.0/accounts/{account.id}/services/{service.id}/",
+        data={"roles": {"admin": {"scope": {}}}},
+        format="json",
+    )
+    assert response.status_code == 200
 
 
 ##

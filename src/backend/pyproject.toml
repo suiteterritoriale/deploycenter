@@ -36,15 +36,13 @@ dependencies = [
     "django-redis==7.0.0",
     "django-timezone-field==7.2.2",
     "djangorestframework==3.18.3",
-    # pinned: recursive-resolver 0.2.0 imports b32_normal_to_hex, gone in 2.9.
-    "dnspython==2.8.0",
     "drf_spectacular==0.30.0",
     "gunicorn==26.2.0",
     "mozilla-django-oidc==5.0.2",
     "psycopg[binary]==3.3.6",
     "PySocks==1.7.1",  # pinned: pulled in by requests[socks]
     # Iterative DNS resolution from the root, for the domains service delegation check.
-    "recursive-resolver==0.2.0",
+    "recursive-resolver==0.3.0",
     "redis==6.4.0",  # pinned: kombu 5.6 requires redis<6.5
     # [socks]: ProConnectPartnersClient can route through a SOCKS5 proxy.
     "requests[socks]==2.34.2",

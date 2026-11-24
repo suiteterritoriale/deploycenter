@@ -161,6 +161,26 @@ def request_has_role_in_organization(request, organization_id, operator_id=None)
     return user_has_role_in_organization(request, organization_id, operator_id)
 
 
+def request_operator_ids_in_organization(request, organization_id):
+    """
+    Return the ids of the operators the request acts as that manage the organization.
+
+    Same rules as request_has_role_in_organization without operator_id: the
+    authenticated operator for an external API key, the operators the user has a
+    role in otherwise (any operator for a superuser).
+    """
+    managing = models.OperatorOrganizationRole.objects.filter(
+        organization_id=organization_id
+    )
+    if request.auth and isinstance(request.auth, models.Operator):
+        managing = managing.filter(operator=request.auth)
+    elif not request.user or not request.user.is_authenticated:
+        return set()
+    elif not request.user.is_superuser:
+        managing = managing.filter(operator__user_roles__user=request.user)
+    return set(managing.values_list("operator_id", flat=True))
+
+
 class OperatorAndOrganizationAccessPermission(permissions.BasePermission):
     """
     Allows access only to authenticated users with a role in a organizations's parent operator.

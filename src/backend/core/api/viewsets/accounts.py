@@ -9,7 +9,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework import permissions as drf_permissions
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
@@ -166,6 +166,7 @@ class AccountViewSet(
         with request_user_context(request.user):
             account = self.get_object()
             service = get_object_or_404(models.Service, id=kwargs["service_id"])
+            self._check_service_access(request, account, service)
 
             raw_roles = request.data.get("roles", {})
 
@@ -228,6 +229,28 @@ class AccountViewSet(
             send_account_webhooks(account)
 
             return Response(self._aggregate_service_links(account, service))
+
+    @staticmethod
+    def _check_service_access(request, account, service):
+        """Only the operator holding the service for the organization may set roles.
+
+        With a subscription, that is its operator. Without one, any of the
+        caller's operators that offers the service.
+        """
+        operator_ids = permissions.request_operator_ids_in_organization(
+            request, account.organization_id
+        )
+        subscription = models.ServiceSubscription.objects.filter(
+            organization_id=account.organization_id, service=service
+        ).first()
+        if subscription:
+            allowed = subscription.operator_id in operator_ids
+        else:
+            allowed = models.OperatorServiceConfig.objects.filter(
+                operator_id__in=operator_ids, service=service
+            ).exists()
+        if not allowed:
+            raise PermissionDenied("This service is not managed by your operator.")
 
     @staticmethod
     def _aggregate_service_links(account, service):

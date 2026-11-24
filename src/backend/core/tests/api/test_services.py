@@ -1314,6 +1314,8 @@ def test_api_organization_service_subscription_no_longer_configured():
 
 def _change_operator_setup(
     is_superuser,
+    admin_of_new=True,
+    admin_of_previous=True,
     configured=True,
     service_kwargs=None,
     organization_kwargs=None,
@@ -1322,13 +1324,17 @@ def _change_operator_setup(
     config2_kwargs=None,
     metadata=None,
 ):
-    """A user on operator1, an organization managed by both, operator2's subscription."""
+    """A user on operator1 (and by default operator2), an organization managed by both,
+    operator2's subscription."""
     user = factories.UserFactory(is_superuser=is_superuser)
     client = APIClient()
     client.force_login(user)
     operator1 = factories.OperatorFactory()
     operator2 = factories.OperatorFactory(**(operator2_kwargs or {}))
-    factories.UserOperatorRoleFactory(user=user, operator=operator1)
+    if admin_of_new:
+        factories.UserOperatorRoleFactory(user=user, operator=operator1)
+    if admin_of_previous:
+        factories.UserOperatorRoleFactory(user=user, operator=operator2)
     organization = factories.OrganizationFactory(**(organization_kwargs or {}))
     for operator in (operator1, operator2):
         factories.OperatorOrganizationRoleFactory(
@@ -1372,9 +1378,22 @@ def test_api_organization_service_subscription_change_operator_superuser():
     assert subscription.metadata == {"foo": "bar"}
 
 
-def test_api_organization_service_subscription_change_operator_not_superuser():
-    """Operator admins cannot change a subscription's operator."""
-    client, _operator1, subscription, url = _change_operator_setup(is_superuser=False)
+def test_api_organization_service_subscription_change_operator_admin_of_both():
+    """An admin of both operators moves the subscription without being a superuser."""
+    client, operator1, subscription, url = _change_operator_setup(is_superuser=False)
+
+    response = client.post(url)
+
+    assert response.status_code == 200
+    subscription.refresh_from_db()
+    assert subscription.operator == operator1
+
+
+def test_api_organization_service_subscription_change_operator_not_admin_of_previous():
+    """An admin of the new operator only cannot take a subscription from another."""
+    client, _operator1, subscription, url = _change_operator_setup(
+        is_superuser=False, admin_of_previous=False
+    )
     previous_operator = subscription.operator
 
     response = client.post(url)
@@ -1382,6 +1401,19 @@ def test_api_organization_service_subscription_change_operator_not_superuser():
     assert response.status_code == 403
     subscription.refresh_from_db()
     assert subscription.operator == previous_operator
+
+
+def test_api_organization_service_subscription_change_operator_superuser_without_roles():
+    """A superuser needs no role on either operator."""
+    client, operator1, subscription, url = _change_operator_setup(
+        is_superuser=True, admin_of_new=False, admin_of_previous=False
+    )
+
+    response = client.post(url)
+
+    assert response.status_code == 200
+    subscription.refresh_from_db()
+    assert subscription.operator == operator1
 
 
 def test_api_organization_service_subscription_change_operator_anonymous():

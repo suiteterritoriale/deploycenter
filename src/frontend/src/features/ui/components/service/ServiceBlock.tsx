@@ -167,7 +167,8 @@ export const ServiceBlock = (props: ServiceBlockProps) => {
   const modals = useModals();
   const { user } = useAuth();
   const { operatorId, operator } = useOperatorContext();
-  // Only superusers may move a subscription between operators (enforced by the API).
+  // The button is shown to superusers only. The API requires an admin role on both
+  // operators.
   const isSuperUser = user?.is_superuser ?? false;
   const changeOperator =
     useMutationChangeOrganizationServiceSubscriptionOperator();

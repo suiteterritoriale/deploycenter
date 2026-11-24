@@ -4,7 +4,8 @@
 from collections import defaultdict
 from collections.abc import Mapping
 
-from django.db.models import Q
+from django.db.models import BooleanField, Q
+from django.db.models.expressions import RawSQL
 
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -792,6 +793,9 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
             )
         website = self._clean_website(website_value, domains)
 
+        if not self._is_superuser():
+            self._check_domains_not_declared_at_dila(domains, existing_metadata)
+
         is_active = attrs.get("is_active", instance.is_active if instance else True)
         if domains and is_active:
             self._check_domains_not_claimed(domains)
@@ -804,6 +808,32 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
             domains_service.DOMAINS_KEY: domains,
             domains_service.WEBSITE_KEY: website,
         }
+
+    def _check_domains_not_declared_at_dila(self, domains, existing_metadata):
+        """Refuse the added domains that DILA attributes to another organization.
+
+        The export serves what a subscription declares in place of the DILA parking
+        page, so without this any operator member could take over the domain of an
+        organization they do not manage. Only the domains this request adds are
+        checked, so one already stored never blocks an unrelated edit. Superusers
+        skip it, the caller does.
+        """
+        stored = existing_metadata.get(domains_service.DOMAINS_KEY)
+        stored = set(
+            domainnames.normalize_domains(stored if isinstance(stored, list) else [])
+        )
+        foreign = domains_service.domains_declared_by_others(
+            self._get_organization(), [d for d in domains if d not in stored]
+        )
+        if foreign:
+            raise serializers.ValidationError(
+                {
+                    domains_service.DOMAINS_KEY: (
+                        f"Domain(s) {', '.join(foreign)} are declared at DILA by "
+                        f"another organization."
+                    )
+                }
+            )
 
     def _check_domains_not_claimed(self, domains):
         """Refuse domains already declared on another active domains subscription."""
@@ -877,12 +907,27 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
         # Same locking as the other domain claims, see _check_domains_not_claimed.
         locks.lock_domains(domains)
 
-        overlap_q = Q()
-        for domain in domains:
-            overlap_q |= Q(metadata__domains__contains=[domain])
-
+        # Stored domains were not always normalized, and Messages grants them as
+        # stored. A JSON containment would miss "Town.FR " when "town.fr" is
+        # claimed, so the match is made on the normalized stored value.
+        # Static SQL: the domains are a bound parameter.
+        holds_a_domain = RawSQL(
+            r"""EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(
+                    CASE WHEN jsonb_typeof(
+                        "deploycenter_service_subscription"."metadata" -> 'domains'
+                    ) = 'array'
+                    THEN "deploycenter_service_subscription"."metadata" -> 'domains'
+                    ELSE '[]'::jsonb END
+                ) AS stored(domain)
+                WHERE lower(regexp_replace(stored.domain, '^\s+|\s+$', '', 'g'))
+                    = ANY(%s::text[])
+            )""",
+            [sorted(domains)],
+            output_field=BooleanField(),
+        )
         conflicting = models.ServiceSubscription.objects.filter(
-            overlap_q, service__type="messages"
+            holds_a_domain, service__type="messages"
         ).select_for_update()
         if self.instance:
             conflicting = conflicting.exclude(pk=self.instance.pk)
