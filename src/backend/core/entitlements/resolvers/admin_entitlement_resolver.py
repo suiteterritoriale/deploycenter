@@ -8,7 +8,7 @@ from core.entitlements.resolvers.entitlement_resolver import (
 
 
 def get_admin_operators(account_email):
-    """Return the active operators whose admins include a user matching
+    """Return the active operators whose admins include an active user matching
     account_email (case-insensitive), as a list of {"name", "id", "url"} sorted
     by name.
     """
@@ -20,6 +20,7 @@ def get_admin_operators(account_email):
             is_active=True,
             user_roles__role="admin",
             user_roles__user__email__iexact=account_email,
+            user_roles__user__is_active=True,
         )
         .order_by("name", "id")
         .values("name", "id", "url")
@@ -64,7 +65,7 @@ class AdminEntitlementResolver(EntitlementResolver):
         - The organization has an OperatorOrganizationRole with role="admin"
           and operator_admins_have_admin_role=True
         - The operator of that role has a UserOperatorRole with role="admin"
-          for a user whose email matches account_email (case-insensitive)
+          for an active user whose email matches account_email (case-insensitive)
         - The organization has an active subscription for the queried service
         """
         account_email = context.get("account_email") or ""
@@ -82,6 +83,7 @@ class AdminEntitlementResolver(EntitlementResolver):
             organization=organization,
             operator__user_roles__role="admin",
             operator__user_roles__user__email__iexact=account_email,
+            operator__user_roles__user__is_active=True,
             organization__service_subscriptions__service=service,
             organization__service_subscriptions__is_active=True,
         ).exists()

@@ -98,6 +98,14 @@ for superusers too. Domains are normalized on write like the other domain
 lists. Only the domains a request adds are checked, so a duplicate already
 stored does not block an unrelated edit.
 
+### Deactivated users
+
+Every right derived from a `UserOperatorRole` (the operator admin passthrough,
+`can_admin_collectivites`, `can_admin_operators`, and the Messages and BAL
+passthroughs) requires the matched `User` to be active. Deactivating a user
+(`is_active=False`) stops these rights, as deleting it would. `Account` roles and
+service links are not tied to a `User`, so they are not affected.
+
 ### Resolution priority order
 
 ```
