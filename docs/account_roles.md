@@ -95,10 +95,11 @@ Messages subscription only, active or not
 (`ServiceSubscriptionSerializer._validate_messages_subscription`). A domain a
 request adds is refused with a 400 when another subscription already holds it,
 for superusers too. Domains are normalized on write like the other domain
-lists. Holders are matched on their normalized stored domains (case and
-surrounding whitespace ignored), so rows written before the normalization still
-hold theirs. Only the domains a request adds are checked, so a duplicate already
-stored does not block an unrelated edit.
+lists. Holders are matched on the domains as stored, which are normalized:
+migration `0023_normalize_messages_domains` rewrote the rows written before the
+normalization. Only the Django admin can store another form. Only the domains a
+request adds are checked, so a duplicate already stored does not block an
+unrelated edit.
 
 ### Deactivated users
 

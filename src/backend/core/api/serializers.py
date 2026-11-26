@@ -4,8 +4,7 @@
 from collections import defaultdict
 from collections.abc import Mapping
 
-from django.db.models import BooleanField, Q
-from django.db.models.expressions import RawSQL
+from django.db.models import Q
 
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -907,36 +906,27 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
         # Same locking as the other domain claims, see _check_domains_not_claimed.
         locks.lock_domains(domains)
 
-        # Stored domains were not always normalized, and Messages grants them as
-        # stored. A JSON containment would miss "Town.FR " when "town.fr" is
-        # claimed, so the match is made on the normalized stored value.
-        # Static SQL: the domains are a bound parameter.
-        holds_a_domain = RawSQL(
-            r"""EXISTS (
-                SELECT 1 FROM jsonb_array_elements_text(
-                    CASE WHEN jsonb_typeof(
-                        "deploycenter_service_subscription"."metadata" -> 'domains'
-                    ) = 'array'
-                    THEN "deploycenter_service_subscription"."metadata" -> 'domains'
-                    ELSE '[]'::jsonb END
-                ) AS stored(domain)
-                WHERE lower(regexp_replace(stored.domain, '^\s+|\s+$', '', 'g'))
-                    = ANY(%s::text[])
-            )""",
-            [sorted(domains)],
-            output_field=BooleanField(),
+        # The API stores normalized domains and migration 0023 normalized the older
+        # rows, so a JSON containment finds them. Only the Django admin can store
+        # another form.
+        overlap_q = Q()
+        for domain in domains:
+            overlap_q |= Q(metadata__domains__contains=[domain])
+
+        conflicting = (
+            models.ServiceSubscription.objects.filter(
+                overlap_q, service__type="messages"
+            )
+            .select_for_update()
+            .exclude(pk=self.instance.pk if self.instance else None)
+            .values_list("metadata", flat=True)
         )
-        conflicting = models.ServiceSubscription.objects.filter(
-            holds_a_domain, service__type="messages"
-        ).select_for_update()
-        if self.instance:
-            conflicting = conflicting.exclude(pk=self.instance.pk)
 
         overlap = set()
-        for metadata in conflicting.values_list("metadata", flat=True):
-            overlap |= set(
-                domainnames.normalize_domains((metadata or {}).get("domains"))
-            ) & set(domains)
+        for metadata in conflicting:
+            overlap |= set(domainnames.normalize_domains(metadata["domains"])) & set(
+                domains
+            )
 
         if overlap:
             raise serializers.ValidationError(

@@ -102,27 +102,6 @@ def test_messages_subscription_rejects_domain_held_elsewhere_in_another_case():
     assert response.status_code == 400
 
 
-@pytest.mark.parametrize("stored", ["Victim-Town.FR", " victim-town.fr\t"])
-def test_messages_subscription_rejects_domain_held_elsewhere_stored_unnormalized(
-    stored,
-):
-    """A holder written before domains were normalized still holds its domain."""
-    user = factories.UserFactory()
-    client = APIClient()
-    client.force_login(user)
-    operator, organization, service = _setup(user)
-    _holder(operator, service, ["other.fr", stored])
-
-    response = client.patch(
-        _url(operator, organization, service),
-        {"metadata": {"domains": ["victim-town.fr"]}},
-        format="json",
-    )
-
-    assert response.status_code == 400
-    assert "victim-town.fr" in str(response.json())
-
-
 def test_messages_subscription_ignores_holders_with_unusable_domains():
     """Rows without a domain list, or with other values in it, are not conflicts."""
     user = factories.UserFactory()
