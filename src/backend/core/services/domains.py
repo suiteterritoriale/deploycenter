@@ -367,6 +367,21 @@ def website_records(entry: dict) -> list[dict]:
     return []
 
 
+def domains_declared_by_others(organization, domains) -> list[str]:
+    """The sorted domains that DILA attributes to organizations other than this one.
+
+    A domain several organizations declare at DILA is not reported when this
+    organization is one of them: it declares it too.
+    """
+    if not domains:
+        return []
+    owners = dila_domain_owners()
+    pk = getattr(organization, "pk", None)
+    return sorted(
+        domain for domain in domains if owners.get(domain) and pk not in owners[domain]
+    )
+
+
 def _dpnt_parking_domains(subscription, taken, owners) -> list[str]:
     """The domains proposed for an organization that declared none.
 

@@ -66,7 +66,12 @@ Rules enforced on write (`ServiceSubscriptionSerializer._validate_domains_subscr
   otherwise;
 - while the subscription is active, its domains are exclusive: a domain already
   declared by another *active* domains subscription is refused, so a parking page
-  never has two organizations behind it.
+  never has two organizations behind it;
+- a domain DILA attributes to other organizations (`proconnect_domains["dpnt"]`,
+  see `dila_domain_owners()`) cannot be added by a non-superuser, because a
+  declaration replaces the DILA parking page the export proposes. A domain several
+  organizations declare at DILA stays open to each of them. Only the domains a
+  request adds are checked, so one already stored never blocks an unrelated edit.
 
 Any member of an operator managing the organization can declare domains and change
 their website configuration (no superuser requirement).

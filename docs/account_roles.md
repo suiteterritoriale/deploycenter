@@ -86,6 +86,29 @@ Both `can_admin_collectivites` and `can_admin_operators` are returned even when
 the queried organization has no active subscription; `is_admin` is only
 returned when it has one.
 
+### `can_admin_maildomains` (Messages service)
+
+Messages makes a user admin of every domain in `can_admin_maildomains`, without
+checking it any further. The resolver reads the domains from the subscription's
+`metadata["domains"]` as they are stored, so a domain may be held by one
+Messages subscription only, active or not
+(`ServiceSubscriptionSerializer._validate_messages_subscription`). A domain a
+request adds is refused with a 400 when another subscription already holds it,
+for superusers too. Domains are normalized on write like the other domain
+lists. Holders are matched on the domains as stored, which are normalized:
+migration `0023_normalize_messages_domains` rewrote the rows written before the
+normalization. Only the Django admin can store another form. Only the domains a
+request adds are checked, so a duplicate already stored does not block an
+unrelated edit.
+
+### Deactivated users
+
+Every right derived from a `UserOperatorRole` (the operator admin passthrough,
+`can_admin_collectivites`, `can_admin_operators`, and the Messages and BAL
+passthroughs) requires the matched `User` to be active. Deactivating a user
+(`is_active=False`) stops these rights, as deleting it would. `Account` roles and
+service links are not tied to a `User`, so they are not affected.
+
 ### Resolution priority order
 
 ```

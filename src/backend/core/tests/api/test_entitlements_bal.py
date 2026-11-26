@@ -756,7 +756,9 @@ def _service_link_client_setup():
     factories.UserOperatorRoleFactory(user=user, operator=operator)
     commune = _make_org(operator)
     account = _make_account(commune)
-    return client, account
+    service = _make_bal_service()
+    factories.OperatorServiceConfigFactory(operator=operator, service=service)
+    return client, account, service
 
 
 @pytest.mark.parametrize(
@@ -765,8 +767,7 @@ def _service_link_client_setup():
 )
 def test_bal_service_link_valid_scope(scope):
     """An empty or channels BAL scope is stored."""
-    client, account = _service_link_client_setup()
-    service = _make_bal_service()
+    client, account, service = _service_link_client_setup()
 
     response = client.patch(
         f"/api/v1.0/accounts/{account.id}/services/{service.id}/",
@@ -791,8 +792,7 @@ def test_bal_service_link_valid_scope(scope):
 )
 def test_bal_service_link_malformed_scope_rejected(scope):
     """A malformed BAL scope is rejected and nothing is stored."""
-    client, account = _service_link_client_setup()
-    service = _make_bal_service()
+    client, account, service = _service_link_client_setup()
 
     response = client.patch(
         f"/api/v1.0/accounts/{account.id}/services/{service.id}/",

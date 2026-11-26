@@ -306,8 +306,9 @@ class OrganizationServiceSubscriptionViewSet(viewsets.ModelViewSet):
         """
         Reassign the subscription of another operator to the operator in the URL.
 
-        Superusers only: operators never act on a subscription they do not own.
-        The state, metadata and entitlements are left as they are, but the
+        Only a superuser, or a user who is an admin of both operators (the one in the
+        URL and the current holder), may do it: operators never act on a subscription
+        they do not own, and API keys cannot do it. The state, metadata and entitlements are left as they are, but the
         subscription is saved (and validated) as one of the new operator: an active
         one that operator may not activate (population limit) is refused with a 400,
         and the new operator's webhooks and service config now apply to it. The
@@ -316,9 +317,9 @@ class OrganizationServiceSubscriptionViewSet(viewsets.ModelViewSet):
         The move is recorded in the organization's admin history.
         """
         # External API keys authenticate without a user.
-        if request.user is None or not request.user.is_superuser:
+        if request.user is None or not request.user.is_authenticated:
             raise PermissionDenied(
-                "Only superusers can change the operator of a subscription."
+                "Only users can change the operator of a subscription."
             )
 
         operator = get_object_or_404(models.Operator, id=self.kwargs["operator_id"])
@@ -337,6 +338,21 @@ class OrganizationServiceSubscriptionViewSet(viewsets.ModelViewSet):
         if subscription is None:
             raise NotFound("Subscription not found.")
         previous_operator = subscription.operator
+
+        if not request.user.is_superuser:
+            admin_operator_ids = set(
+                models.UserOperatorRole.objects.filter(
+                    user=request.user,
+                    role="admin",
+                    operator__in=[operator, previous_operator],
+                ).values_list("operator_id", flat=True)
+            )
+            if {operator.pk, previous_operator.pk} - admin_operator_ids:
+                raise PermissionDenied(
+                    "You must be an admin of both operators to change the operator "
+                    "of a subscription."
+                )
+
         if previous_operator.pk == operator.pk:
             raise ValidationError("This subscription already belongs to this operator.")
 

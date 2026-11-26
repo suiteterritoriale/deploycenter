@@ -18,9 +18,10 @@ class AdcAdminEntitlementResolver(ExtendedAdminEntitlementResolver):
     operator admin, across all organizations.
 
     The user is matched by account_email (case-insensitive) against the
-    UserOperatorRole admins of active operators. Such an operator grants every
-    commune it has an OperatorOrganizationRole on. Service subscriptions and
-    operator_admins_have_admin_role are not considered.
+    UserOperatorRole admins of active operators, who must be active users.
+    Such an operator grants every commune it has an OperatorOrganizationRole
+    on. Service subscriptions and operator_admins_have_admin_role are not
+    considered.
 
     Also returns can_admin_operators: the same active operators, as
     {"name", "id", "url"} dicts (see get_admin_operators).
@@ -58,6 +59,7 @@ class AdcAdminEntitlementResolver(ExtendedAdminEntitlementResolver):
                 operator_roles__operator__is_active=True,
                 operator_roles__operator__user_roles__role="admin",
                 operator_roles__operator__user_roles__user__email__iexact=account_email,
+                operator_roles__operator__user_roles__user__is_active=True,
             )
             .exclude(Q(siren__isnull=True) | Q(siren=""))
             .order_by("siren")

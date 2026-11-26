@@ -116,7 +116,11 @@
   &--disabled {
     background-color: var(--c--theme--colors--greyscale-050);
 
-    > :not(.dc__service__block__transfer) {
+    // The header is not faded as a whole: it would become a stacking context
+    // and the switch tooltip would be painted under the body.
+    > :not(.dc__service__block__transfer):not(.dc__service__block__header),
+    .dc__service__block__header__title,
+    .dc__service__block__switch-wrapper {
       opacity: 0.7;
     }
   }
@@ -130,7 +134,6 @@
     border-bottom: 1px solid var(--c--theme--colors--greyscale-200);
     padding-bottom: 8px;
     margin-bottom: 16px;
-    overflow: hidden;
 
     .c__checkbox {
       flex-shrink: 0;
@@ -146,6 +149,10 @@
       align-items: center;
       gap: 16px;
       height: 100%;
+      min-width: 0;
+      // Clip here and not on the header: the switch tooltip is rendered inline
+      // and must be able to overflow the header.
+      overflow: hidden;
     }
 
     &__switch {

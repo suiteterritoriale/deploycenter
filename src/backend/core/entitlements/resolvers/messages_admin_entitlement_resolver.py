@@ -23,7 +23,7 @@ class MessagesAdminEntitlementResolver(AdminEntitlementResolver):
     subscription's actual domains). An empty scope means unrestricted.
 
     Operator admin passthrough: when an OperatorOrganizationRole has
-    operator_admins_have_admin_role=True, users with a UserOperatorRole
+    operator_admins_have_admin_role=True, active users with a UserOperatorRole
     for that operator are granted unrestricted mail domain admin on
     the corresponding organization's subscriptions.
 
@@ -106,6 +106,7 @@ class MessagesAdminEntitlementResolver(AdminEntitlementResolver):
                     operator_admins_have_admin_role=True,
                     operator__user_roles__role="admin",
                     operator__user_roles__user__email__iexact=account_email,
+                    operator__user_roles__user__is_active=True,
                     organization__service_subscriptions__service=service,
                     organization__service_subscriptions__is_active=True,
                 )

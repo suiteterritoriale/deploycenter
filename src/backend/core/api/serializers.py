@@ -792,6 +792,9 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
             )
         website = self._clean_website(website_value, domains)
 
+        if not self._is_superuser():
+            self._check_domains_not_declared_at_dila(domains, existing_metadata)
+
         is_active = attrs.get("is_active", instance.is_active if instance else True)
         if domains and is_active:
             self._check_domains_not_claimed(domains)
@@ -804,6 +807,32 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
             domains_service.DOMAINS_KEY: domains,
             domains_service.WEBSITE_KEY: website,
         }
+
+    def _check_domains_not_declared_at_dila(self, domains, existing_metadata):
+        """Refuse the added domains that DILA attributes to another organization.
+
+        The export serves what a subscription declares in place of the DILA parking
+        page, so without this any operator member could take over the domain of an
+        organization they do not manage. Only the domains this request adds are
+        checked, so one already stored never blocks an unrelated edit. Superusers
+        skip it, the caller does.
+        """
+        stored = existing_metadata.get(domains_service.DOMAINS_KEY)
+        stored = set(
+            domainnames.normalize_domains(stored if isinstance(stored, list) else [])
+        )
+        foreign = domains_service.domains_declared_by_others(
+            self._get_organization(), [d for d in domains if d not in stored]
+        )
+        if foreign:
+            raise serializers.ValidationError(
+                {
+                    domains_service.DOMAINS_KEY: (
+                        f"Domain(s) {', '.join(foreign)} are declared at DILA by "
+                        f"another organization."
+                    )
+                }
+            )
 
     def _check_domains_not_claimed(self, domains):
         """Refuse domains already declared on another active domains subscription."""
@@ -839,6 +868,70 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {
                     domains_service.DOMAINS_KEY: (
+                        f"Domain(s) {', '.join(sorted(overlap))} are already "
+                        f"declared by another organization."
+                    )
+                }
+            )
+
+    def _validate_messages_subscription(self, attrs):
+        """Validate the ``domains`` metadata of a Messages subscription.
+
+        Messages makes a user admin of every domain returned by the admin
+        entitlement, which reads them from the subscription as they are stored. A
+        domain therefore belongs to a single subscription, active or not. Only the
+        domains this request adds are checked: a duplicate already stored must not
+        block an unrelated edit.
+        """
+        if self._get_service_type() != "messages":
+            return
+
+        new_metadata = attrs.get("metadata") or {}
+        if "domains" not in new_metadata:
+            return
+
+        domains = self._clean_domain_list(new_metadata["domains"], "metadata")
+        existing_metadata = (self.instance.metadata if self.instance else {}) or {}
+        stored = existing_metadata.get("domains")
+        added = set(domains) - set(
+            domainnames.normalize_domains(stored if isinstance(stored, list) else [])
+        )
+        if added:
+            self._check_messages_domains_not_claimed(added)
+
+        attrs["metadata"] = {**new_metadata, "domains": domains}
+
+    def _check_messages_domains_not_claimed(self, domains):
+        """Refuse domains held by another Messages subscription, active or not."""
+        # Same locking as the other domain claims, see _check_domains_not_claimed.
+        locks.lock_domains(domains)
+
+        # The API stores normalized domains and migration 0023 normalized the older
+        # rows, so a JSON containment finds them. Only the Django admin can store
+        # another form.
+        overlap_q = Q()
+        for domain in domains:
+            overlap_q |= Q(metadata__domains__contains=[domain])
+
+        conflicting = (
+            models.ServiceSubscription.objects.filter(
+                overlap_q, service__type="messages"
+            )
+            .select_for_update()
+            .exclude(pk=self.instance.pk if self.instance else None)
+            .values_list("metadata", flat=True)
+        )
+
+        overlap = set()
+        for metadata in conflicting:
+            overlap |= set(domainnames.normalize_domains(metadata["domains"])) & set(
+                domains
+            )
+
+        if overlap:
+            raise serializers.ValidationError(
+                {
+                    "metadata": (
                         f"Domain(s) {', '.join(sorted(overlap))} are already "
                         f"declared by another organization."
                     )
@@ -975,6 +1068,7 @@ class ServiceSubscriptionSerializer(serializers.ModelSerializer):
 
         self._validate_proconnect_subscription(attrs)
         self._validate_domains_subscription(attrs)
+        self._validate_messages_subscription(attrs)
 
         service = self._get_service()
         if service:

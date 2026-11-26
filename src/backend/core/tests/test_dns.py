@@ -4,6 +4,8 @@ The network is replaced by an in-process hierarchy of authoritative servers, so
 these run offline and exercise the real resolver from the root down.
 """
 
+from collections import Counter
+
 import dns.flags
 import dns.message
 import dns.name
@@ -129,11 +131,11 @@ def fake_dns_fixture(monkeypatch):
     """Route every query the resolver sends to the fake hierarchy; count them."""
     sent = []
 
-    def udp_with_fallback(query, where, **kwargs):  # pylint: disable=unused-argument
+    def udp(query, where, **kwargs):  # pylint: disable=unused-argument
         sent.append((query.question[0].name.to_text(), where))
-        return _answer(query, where), False
+        return _answer(query, where)
 
-    monkeypatch.setattr(dns.query, "udp_with_fallback", udp_with_fallback)
+    monkeypatch.setattr(dns.query, "udp", udp)
     return sent
 
 
@@ -149,9 +151,10 @@ def test_nameservers_through_a_chain_of_glueless_delegations(fake_dns):
     assert results == {
         "houdelaincourt.fr": (["ns1.lst-domaines.fr", "ns2.lst-domaines.fr"], None)
     }
-    lookups = [name for name, _ in fake_dns if name == "nsa.scaleway.com."]
-    # One walk: the root, the .com referral, then the scaleway.com answer.
-    assert len(lookups) == 3
+    lookups = Counter(name for name, _ in fake_dns if name in SCALEWAY)
+    # One walk for the first hostname the resolver picks: the root, the .com
+    # referral, then the scaleway.com answer. None is looked up again per level.
+    assert max(lookups.values()) == 3
 
 
 @pytest.mark.usefixtures("fake_dns")

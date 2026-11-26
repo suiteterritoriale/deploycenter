@@ -119,6 +119,15 @@ cached between deploys.
 | `DEPLOYCENTER_ADMIN_IP_ALLOWLIST` | `0.0.0.0/0 ::/0` | Space-separated CIDR list of client IPs allowed on the Django admin URL. The default allows all (no filtering). Caddy answers 403 to denied requests. |
 | `DEPLOYCENTER_TRUSTED_PROXIES` | _(empty)_ | Space-separated CIDR list of upstream proxies whose `X-Forwarded-For` sets the client IP. Empty = trust no proxy, the client IP is then the TCP peer. Caddy walks the header from right to left and takes the first address that is not a trusted proxy. |
 
+## Who can use the Django admin
+
+Only active staff users who are also superusers (`core/admin_site.py`). Ticking
+`is_staff` and granting model permissions opens nothing: the user is sent to
+the login page. This is deliberate, because the custom admin pages (bulk imports,
+passwordless users, bulk subscriptions) and some admin actions do not check
+model permissions, so a staff user who is not a superuser could use them to
+write anything.
+
 ## Restricting the Django admin to a set of IPs
 
 Set `DEPLOYCENTER_ADMIN_IP_ALLOWLIST` to the allowed CIDRs, and
