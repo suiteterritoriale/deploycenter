@@ -1627,11 +1627,11 @@ class ServiceSubscriptionAdminForm(forms.ModelForm):
 
     class Meta:
         model = models.ServiceSubscription
-        fields = "__all__"
+        fields = ("organization", "operator", "service", "is_active", "metadata")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self.instance._state.adding:  # pylint: disable=protected-access
+        if not self.instance._state.adding:  # pylint: disable=protected-access # noqa: SLF001
             del self.fields["bypass_population_limits"]
 
     def clean(self):
