@@ -1102,6 +1102,9 @@ class ServiceSubscription(BaseModel):
         help_text=_("Whether this subscription is currently active"),
     )
 
+    # Not stored: set by the admin add form to skip the population limits.
+    bypass_population_limits = False
+
     class Meta:
         db_table = "deploycenter_service_subscription"
         verbose_name = _("service subscription")
@@ -1164,6 +1167,8 @@ class ServiceSubscription(BaseModel):
             self.organization, self.operator
         )
         if can_activate:
+            return
+        if reason == "population_limit_exceeded" and self.bypass_population_limits:
             return
 
         raise ValidationError(f"Cannot activate this subscription. Reason: {reason}")

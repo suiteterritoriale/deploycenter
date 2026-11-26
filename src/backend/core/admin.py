@@ -1612,10 +1612,42 @@ class ProConnectManualActionsForm(forms.Form):
         return cleaned_data
 
 
+class ServiceSubscriptionAdminForm(forms.ModelForm):
+    """Subscription form, with a box to skip the population limits on creation."""
+
+    bypass_population_limits = forms.BooleanField(
+        label=_("Bypass population limits"),
+        required=False,
+        initial=False,
+        help_text=_(
+            "Create the subscription even if the organization is above the "
+            "population limits of the service."
+        ),
+    )
+
+    class Meta:
+        model = models.ServiceSubscription
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance._state.adding:  # pylint: disable=protected-access
+            del self.fields["bypass_population_limits"]
+
+    def clean(self):
+        """Pass the box on to the model, whose validation applies the limits."""
+        cleaned_data = super().clean()
+        self.instance.bypass_population_limits = cleaned_data.get(
+            "bypass_population_limits", False
+        )
+        return cleaned_data
+
+
 @admin.register(models.ServiceSubscription)
 class ServiceSubscriptionAdmin(admin.ModelAdmin):
     """Admin class for the ServiceSubscription model"""
 
+    form = ServiceSubscriptionAdminForm
     change_form_template = "admin/core/servicesubscription/change_form.html"
 
     list_display = (
@@ -1650,6 +1682,15 @@ class ServiceSubscriptionAdmin(admin.ModelAdmin):
         (_("Subscription Data"), {"fields": ("metadata",)}),
         (_("Metadata"), {"fields": ("created_at", "updated_at")}),
     )
+
+    def get_fieldsets(self, request, obj=None):
+        """Offer the population limits bypass on the add form only."""
+        fieldsets = super().get_fieldsets(request, obj)
+        if obj is not None:
+            return fieldsets
+        (name, options), *rest = fieldsets
+        fields = (*options["fields"], "bypass_population_limits")
+        return ((name, {**options, "fields": fields}), *rest)
 
     def get_urls(self):
         """Add custom URLs for bulk subscribe and ProConnect manual actions."""

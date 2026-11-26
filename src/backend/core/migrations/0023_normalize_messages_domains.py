@@ -4,13 +4,16 @@ from django.db import migrations
 def normalize_messages_domains(apps, schema_editor):
     """Store the domains of Messages subscriptions stripped, lowercased and sorted.
 
-    Messages grants them as stored, and the API now refuses a domain another
-    subscription holds by matching the normalized form. Rows written before the API
-    normalized them are rewritten. A list holding anything but strings is left alone.
+    Messages grants them as stored, and the API refuses a domain another
+    subscription holds by matching the stored values. Rows written before the API
+    normalized them are rewritten. Metadata that is not an object, and a list holding
+    anything but strings, are left alone.
     """
     ServiceSubscription = apps.get_model("core", "ServiceSubscription")
     for subscription in ServiceSubscription.objects.filter(service__type="messages"):
-        metadata = subscription.metadata or {}
+        metadata = subscription.metadata
+        if not isinstance(metadata, dict):
+            continue
         domains = metadata.get("domains")
         if not isinstance(domains, list) or not all(isinstance(d, str) for d in domains):
             continue

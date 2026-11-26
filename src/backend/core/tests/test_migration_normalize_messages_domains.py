@@ -47,10 +47,20 @@ def test_messages_domains_are_stripped_lowercased_and_sorted():
 
 @pytest.mark.parametrize(
     "metadata",
-    [{}, {"domains": "Town.FR"}, {"domains": ["Town.FR", 1]}, {"domains": ["a.fr"]}],
+    [
+        {},
+        {"domains": "Town.FR"},
+        {"domains": ["Town.FR", 1]},
+        {"domains": ["a.fr"]},
+        ["Town.FR"],
+        "Town.FR",
+    ],
 )
 def test_other_messages_metadata_is_left_alone(metadata):
-    """Rows without a clean list of strings, or already normalized, do not change."""
+    """Rows without a clean list of strings, or already normalized, do not change.
+
+    That includes metadata that is not an object at all.
+    """
     subscription = _subscription("messages", metadata)
 
     migration.normalize_messages_domains(apps, None)
